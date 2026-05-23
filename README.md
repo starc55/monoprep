@@ -53,6 +53,16 @@ npm install
 npm run dev
 ```
 
+## Vercel Frontend Deployment
+
+Deploy the Vite application with `frontend` configured as the Vercel project root. Its
+`vercel.json` keeps React Router deep links such as `/admin/exams` and `/exam/:id`
+working after a direct visit or browser refresh.
+
+Set `VITE_API_URL` in the Vercel frontend environment to the deployed backend API URL,
+including the `/api` suffix. The Express backend and uploaded exam media must run on a
+persistent backend or object storage service rather than the static frontend deployment.
+
 Default seeded users:
 
 - Admin: `admin@satai.com` / `Admin123!`

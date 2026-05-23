@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="720" height="420" viewBox="0 0 720 420" role="img" aria-label="Scatterplot with positive linear trend">
+  <rect width="720" height="420" fill="#ffffff"/>
+  <rect x="86" y="38" width="578" height="304" rx="8" fill="#fafafa" stroke="#dddddd"/>
+  <g stroke="#e4e4e4" stroke-width="1">
+    <path d="M86 98h578M86 158h578M86 218h578M86 278h578"/>
+    <path d="M196 38v304M306 38v304M416 38v304M526 38v304"/>
+  </g>
+  <path d="M86 342h578M86 38v304" stroke="#111111" stroke-width="2"/>
+  <path d="M142 282L578 88" stroke="#5b5b5b" stroke-width="3" stroke-dasharray="8 6"/>
+  <g fill="#111111">
+    <circle cx="142" cy="286" r="7"/>
+    <circle cx="252" cy="239" r="7"/>
+    <circle cx="362" cy="184" r="7"/>
+    <circle cx="472" cy="131" r="7"/>
+    <circle cx="578" cy="92" r="7"/>
+  </g>
+  <g fill="#555555" font-family="Arial, sans-serif" font-size="14">
+    <text x="310" y="390">Hours studied</text>
+    <text transform="rotate(-90 28 230)" x="28" y="230">Practice score</text>
+    <text x="120" y="364">1</text>
+    <text x="230" y="364">2</text>
+    <text x="340" y="364">3</text>
+    <text x="450" y="364">4</text>
+    <text x="560" y="364">5</text>
+  </g>
+</svg>

@@ -1,14 +1,35 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import {
+  ArrowRight,
+  BarChart3,
+  BookOpen,
+  ClipboardList,
+  FileQuestion,
+  ShieldAlert,
+  Trophy,
+  UsersRound
+} from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import Card from '../components/ui/Card.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import AdminStatsPanel from '../components/admin/AdminStatsPanel.jsx';
 import { getStats } from '../services/adminService.js';
+
+const adminModules = [
+  { title: 'Exams', path: '/admin/exams', copy: 'Build sections, questions, options, and publishing status.', icon: ClipboardList },
+  { title: 'Questions', path: '/admin/questions', copy: 'Audit skills, difficulty, answer keys, and options.', icon: FileQuestion },
+  { title: 'Passages', path: '/admin/passages', copy: 'Create and maintain stimulus material.', icon: BookOpen },
+  { title: 'Users', path: '/admin/users', copy: 'View student and admin profiles.', icon: UsersRound },
+  { title: 'Attempts', path: '/admin/attempts', copy: 'Monitor active and submitted attempts.', icon: Trophy },
+  { title: 'Stats', path: '/admin/stats', copy: 'Review platform-level performance.', icon: BarChart3 }
+];
 
 export default function AdminPanelPage() {
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState(null);
+  const [failed, setFailed] = useState(false);
 
   async function loadAll() {
     const statsResponse = await getStats();
@@ -16,16 +37,30 @@ export default function AdminPanelPage() {
   }
 
   useEffect(() => {
-    loadAll().finally(() => setLoading(false));
+    loadAll()
+      .catch(() => setFailed(true))
+      .finally(() => setLoading(false));
   }, []);
 
-  if (loading || !stats) {
+  if (loading) {
     return (
       <AdminLayout
         title="Admin Panel"
         subtitle="A separate control center for exams, questions, users, attempts, and platform stats."
       >
         <Loader label="Loading admin panel..." />
+      </AdminLayout>
+    );
+  }
+
+  if (failed || !stats) {
+    return (
+      <AdminLayout title="Admin Panel" subtitle="Secure platform administration workspace.">
+        <EmptyState
+          icon={ShieldAlert}
+          title="Admin data unavailable"
+          message="The control center could not load right now. Refresh after checking your admin session."
+        />
       </AdminLayout>
     );
   }
@@ -38,18 +73,13 @@ export default function AdminPanelPage() {
       <AdminStatsPanel totals={stats.totals} />
 
       <div className="content-grid admin-overview-grid">
-        {[
-          ['Exams', '/admin/exams', 'Build sections, questions, options, and publishing status.'],
-          ['Questions', '/admin/questions', 'Audit skills, difficulty, answer keys, and options.'],
-          ['Passages', '/admin/passages', 'Create and maintain stimulus material.'],
-          ['Users', '/admin/users', 'View student and admin profiles.'],
-          ['Attempts', '/admin/attempts', 'Monitor active and submitted attempts.'],
-          ['Stats', '/admin/stats', 'Review platform-level performance.']
-        ].map(([title, path, copy]) => (
-          <Card key={path} title={title}>
+        {adminModules.map(({ title, path, copy, icon: Icon }) => (
+          <Card key={path} title={title} className="admin-module-card">
+            <span className="admin-module-icon"><Icon aria-hidden="true" /></span>
             <p>{copy}</p>
             <Link className="button button-primary" to={path}>
-              Open
+              Open module
+              <ArrowRight aria-hidden="true" />
             </Link>
           </Card>
         ))}

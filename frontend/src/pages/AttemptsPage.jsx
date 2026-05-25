@@ -16,6 +16,7 @@ export default function AttemptsPage() {
   useEffect(() => {
     getMyAttempts()
       .then(setAttempts)
+      .catch(() => setAttempts([]))
       .finally(() => setLoading(false));
   }, []);
 

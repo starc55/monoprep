@@ -1,28 +1,30 @@
+import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import LoginPage from './pages/LoginPage.jsx';
-import RegisterPage from './pages/RegisterPage.jsx';
-import DashboardPage from './pages/DashboardPage.jsx';
-import PracticePage from './pages/PracticePage.jsx';
-import SupportPage from './pages/SupportPage.jsx';
-import ExamInstructionsPage from './pages/ExamInstructionsPage.jsx';
-import ExamRoomPage from './pages/ExamRoomPage.jsx';
-import ExamReviewPage from './pages/ExamReviewPage.jsx';
-import AIFeedbackPage from './pages/AIFeedbackPage.jsx';
-import AdminPanelPage from './pages/AdminPanelPage.jsx';
-import NotFoundPage from './pages/NotFoundPage.jsx';
 import { useAuthStore } from './store/authStore.js';
 import { useAuthBootstrap } from './hooks/useAuth.js';
 import Loader from './components/ui/Loader.jsx';
-import ProfilePage from './pages/ProfilePage.jsx';
-import AdminExamsPage from './pages/AdminExamsPage.jsx';
-import AdminQuestionsPage from './pages/AdminQuestionsPage.jsx';
-import AdminPassagesPage from './pages/AdminPassagesPage.jsx';
-import AdminUsersPage from './pages/AdminUsersPage.jsx';
-import AdminAttemptsPage from './pages/AdminAttemptsPage.jsx';
-import AdminStatsPage from './pages/AdminStatsPage.jsx';
-import AttemptsPage from './pages/AttemptsPage.jsx';
-import AnalyticsPage from './pages/AnalyticsPage.jsx';
-import SettingsPage from './pages/SettingsPage.jsx';
+
+const LoginPage = lazy(() => import('./pages/LoginPage.jsx'));
+const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'));
+const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
+const PracticePage = lazy(() => import('./pages/PracticePage.jsx'));
+const SupportPage = lazy(() => import('./pages/SupportPage.jsx'));
+const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'));
+const AttemptsPage = lazy(() => import('./pages/AttemptsPage.jsx'));
+const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage.jsx'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'));
+const ExamInstructionsPage = lazy(() => import('./pages/ExamInstructionsPage.jsx'));
+const ExamRoomPage = lazy(() => import('./pages/ExamRoomPage.jsx'));
+const ExamReviewPage = lazy(() => import('./pages/ExamReviewPage.jsx'));
+const AIFeedbackPage = lazy(() => import('./pages/AIFeedbackPage.jsx'));
+const AdminPanelPage = lazy(() => import('./pages/AdminPanelPage.jsx'));
+const AdminExamsPage = lazy(() => import('./pages/AdminExamsPage.jsx'));
+const AdminQuestionsPage = lazy(() => import('./pages/AdminQuestionsPage.jsx'));
+const AdminPassagesPage = lazy(() => import('./pages/AdminPassagesPage.jsx'));
+const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage.jsx'));
+const AdminAttemptsPage = lazy(() => import('./pages/AdminAttemptsPage.jsx'));
+const AdminStatsPage = lazy(() => import('./pages/AdminStatsPage.jsx'));
+const NotFoundPage = lazy(() => import('./pages/NotFoundPage.jsx'));
 
 function ProtectedRoute({ children }) {
   const token = useAuthStore((state) => state.token);
@@ -53,7 +55,8 @@ export default function App() {
   }
 
   return (
-    <Routes>
+    <Suspense fallback={<Loader label="Loading your workspace..." />}>
+      <Routes>
       <Route path="/" element={<RoleRedirect />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/register" element={<RegisterPage />} />
@@ -231,7 +234,8 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route path="*" element={<NotFoundPage />} />
-    </Routes>
+        <Route path="*" element={<NotFoundPage />} />
+      </Routes>
+    </Suspense>
   );
 }

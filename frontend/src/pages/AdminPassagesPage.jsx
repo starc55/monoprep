@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { BookOpen } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import AdminLayout from '../layouts/AdminLayout.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import { createPassage, deletePassage, getPassages, updatePassage } from '../services/examService.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
@@ -21,7 +23,9 @@ export default function AdminPassagesPage() {
   }
 
   useEffect(() => {
-    load().finally(() => setLoading(false));
+    load()
+      .catch(() => setPassages([]))
+      .finally(() => setLoading(false));
   }, []);
 
   function openEditDialog(passage) {
@@ -81,7 +85,7 @@ export default function AdminPassagesPage() {
           </form>
         </Card>
         <Card title="Passage Library">
-          <div className="passage-library-grid">
+          {passages.length ? <div className="passage-library-grid">
             {passages.map((passage) => (
               <article key={passage.id} className="review-item passage-item">
                 <div className="review-item-head">
@@ -114,7 +118,13 @@ export default function AdminPassagesPage() {
                 </div>
               </article>
             ))}
-          </div>
+          </div> : (
+            <EmptyState
+              icon={BookOpen}
+              title="No passages yet"
+              message="Create reading stimulus material to build your content library."
+            />
+          )}
         </Card>
       </div>
 

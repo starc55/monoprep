@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
+import { FileQuestion } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import AdminLayout from '../layouts/AdminLayout.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import { createOption, deleteOption, deleteQuestion, getQuestions, updateQuestion } from '../services/examService.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
@@ -25,7 +27,9 @@ export default function AdminQuestionsPage() {
   }
 
   useEffect(() => {
-    load().finally(() => setLoading(false));
+    load()
+      .catch(() => setQuestions([]))
+      .finally(() => setLoading(false));
   }, []);
 
   function closeDialog() {
@@ -108,7 +112,7 @@ export default function AdminQuestionsPage() {
   return (
     <AdminLayout title="Questions" subtitle="Audit question bank items, answer keys, skills, and options.">
       <Card title="Question Bank">
-        <div className="table-wrap">
+        {questions.length ? <div className="table-wrap">
           <table className="data-table admin-data-table">
             <thead>
               <tr>
@@ -174,7 +178,13 @@ export default function AdminQuestionsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div> : (
+          <EmptyState
+            icon={FileQuestion}
+            title="Question bank is empty"
+            message="Questions added through an exam builder will be visible here."
+          />
+        )}
       </Card>
 
       <Modal

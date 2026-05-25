@@ -1,10 +1,12 @@
 import { useEffect, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import AdminLayout from '../layouts/AdminLayout.jsx';
 import AdminExamBuilder from '../components/admin/AdminExamBuilder.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
 import { getApiErrorMessage } from '../utils/apiError.js';
 import {
@@ -38,7 +40,12 @@ export default function AdminExamsPage() {
   }
 
   useEffect(() => {
-    load().finally(() => setLoading(false));
+    load()
+      .catch(() => {
+        setExams([]);
+        setPassages([]);
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   function openSectionEditor(section) {
@@ -111,7 +118,7 @@ export default function AdminExamsPage() {
 
       <div className="admin-content-grid">
         <Card title="Exam Catalog">
-          <div className="table-wrap">
+          {exams.length ? <div className="table-wrap">
             <table className="data-table admin-data-table">
               <thead>
                 <tr>
@@ -153,11 +160,17 @@ export default function AdminExamsPage() {
                 ))}
               </tbody>
             </table>
-          </div>
+          </div> : (
+            <EmptyState
+              icon={ClipboardList}
+              title="No exams created"
+              message="Create an exam above to start assembling sections and questions."
+            />
+          )}
         </Card>
 
         <Card title="Sections">
-          <div className="review-list">
+          {exams.some((exam) => exam.sections.length) ? <div className="review-list">
             {exams.flatMap((exam) =>
               exam.sections.map((section) => (
                 <article key={section.id} className="review-item">
@@ -183,7 +196,13 @@ export default function AdminExamsPage() {
                 </article>
               ))
             )}
-          </div>
+          </div> : (
+            <EmptyState
+              icon={ClipboardList}
+              title="No sections yet"
+              message="Exam modules will appear here once they are created."
+            />
+          )}
         </Card>
       </div>
 

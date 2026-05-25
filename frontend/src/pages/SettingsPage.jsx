@@ -14,7 +14,7 @@ export default function SettingsPage() {
       <div className="content-grid settings-grid">
         <Card title="Account security" className="settings-card">
           <span className="settings-card-icon success"><LockKeyhole aria-hidden="true" /></span>
-          <p>Your signed-in session is protected. Your exam attempts stay connected to {user?.email}.</p>
+          <p>Your signed-in session is protected. Your exam attempts stay connected to {user?.email || 'your account'}.</p>
           <span className="pill success">Secure account</span>
         </Card>
         <Card title="Study notifications" className="settings-card">

@@ -32,6 +32,7 @@ export default function ProfilePage() {
   const updateProfile = useAuthStore((state) => state.updateProfile);
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => {
@@ -41,8 +42,14 @@ export default function ProfilePage() {
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
-    await updateProfile({ fullName });
-    setSaving(false);
+    setSaveError('');
+    try {
+      await updateProfile({ fullName });
+    } catch {
+      setSaveError('Profile could not be saved right now. Please try again after signing in.');
+    } finally {
+      setSaving(false);
+    }
   }
 
   const attempts = analytics?.overview?.attemptsTaken || 0;
@@ -54,8 +61,8 @@ export default function ProfilePage() {
         <div className="profile-avatar">{getInitials(user?.fullName)}</div>
         <div className="profile-identity">
           <span className="profile-chip"><BadgeCheck aria-hidden="true" /> SAT Student</span>
-          <h2>{user?.fullName}</h2>
-          <p><Mail aria-hidden="true" /> {user?.email}</p>
+          <h2>{user?.fullName || 'MonoPrep Student'}</h2>
+          <p><Mail aria-hidden="true" /> {user?.email || 'Student account'}</p>
         </div>
         <div className="profile-highlights">
           <div><strong>{attempts}</strong><span>Tests completed</span></div>
@@ -75,6 +82,7 @@ export default function ProfilePage() {
               <span><Mail aria-hidden="true" /> Email address</span>
               <input value={user?.email || ''} disabled />
             </label>
+            {saveError ? <p className="support-status error">{saveError}</p> : null}
             <Button type="submit" disabled={saving}>
               {saving ? <Sparkles aria-hidden="true" /> : <Save aria-hidden="true" />}
               {saving ? 'Saving...' : 'Save profile'}

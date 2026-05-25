@@ -81,7 +81,7 @@ export default function AppLayout({ title, subtitle, actions, children }) {
         />
       ) : null}
       <motion.aside
-        className={`app-sidebar student-sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`.trim()}
+        className={`app-sidebar premium-sidebar student-sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`.trim()}
         initial={false}
         animate={{ width: sidebarCollapsed ? 96 : 284 }}
         transition={{ duration: 0.22, ease: 'easeOut' }}
@@ -107,12 +107,24 @@ export default function AppLayout({ title, subtitle, actions, children }) {
         <nav className="sidebar-nav" aria-label="Student navigation">
           <span className="sidebar-section-label">Menu</span>
           {studentNavigation.map(({ to, label, icon: Icon }) => (
-            <NavLink key={to} to={to} onClick={handleNavClick} title={sidebarCollapsed ? label : undefined}>
+            <NavLink
+              key={to}
+              to={to}
+              onClick={handleNavClick}
+              aria-label={sidebarCollapsed ? label : undefined}
+              data-tooltip={sidebarCollapsed ? label : undefined}
+            >
               <Icon aria-hidden="true" />
               <span className="sidebar-label">{label}</span>
             </NavLink>
           ))}
-          <button type="button" className="sidebar-link" onClick={handleLogout}>
+          <button
+            type="button"
+            className="sidebar-link"
+            onClick={handleLogout}
+            aria-label={sidebarCollapsed ? 'Logout' : undefined}
+            data-tooltip={sidebarCollapsed ? 'Logout' : undefined}
+          >
             <LogOut aria-hidden="true" />
             <span className="sidebar-label">Logout</span>
           </button>
@@ -121,14 +133,20 @@ export default function AppLayout({ title, subtitle, actions, children }) {
           <div className="sidebar-user-row">
             <span className="sidebar-avatar">{getInitials(user?.fullName)}</span>
             <div className="sidebar-user-copy">
-              <strong>{user?.fullName}</strong>
-              <span>{user?.email}</span>
+              <strong>{user?.fullName || 'MonoPrep Student'}</strong>
+              <span>{user?.email || 'Signed-in account'}</span>
             </div>
             <NavLink className="sidebar-settings" to="/settings" aria-label="Open settings">
               <Settings aria-hidden="true" />
             </NavLink>
           </div>
-          <button type="button" className="sidebar-logout" onClick={handleLogout}>
+          <button
+            type="button"
+            className="sidebar-logout"
+            onClick={handleLogout}
+            aria-label={sidebarCollapsed ? 'Sign out' : undefined}
+            data-tooltip={sidebarCollapsed ? 'Sign out' : undefined}
+          >
             <LogOut aria-hidden="true" />
             <span>Sign out</span>
           </button>

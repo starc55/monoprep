@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { ArrowRight, ClipboardList, PlayCircle, TrendingUp, UserRound } from 'lucide-react';
 import AppLayout from '../layouts/AppLayout.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import StatCard from '../components/ui/StatCard.jsx';
@@ -27,6 +28,7 @@ export default function DashboardPage() {
         subtitle="Track your recent work, see where scores are moving, and jump back into practice."
         actions={
           <Link className="button button-primary" to="/practice">
+            <PlayCircle aria-hidden="true" />
             Start practice
           </Link>
         }
@@ -42,14 +44,15 @@ export default function DashboardPage() {
       subtitle="A clean launch point for your prep workspace."
       actions={
         <Link className="button button-primary" to="/practice">
+          <PlayCircle aria-hidden="true" />
           Open practice exams
         </Link>
       }
     >
       <div className="stats-grid">
-        <StatCard label="Available Exams" value={exams.length} />
-        <StatCard label="Practice Hub" value="1" hint="Attempts and analytics are inside Practice Exams." />
-        <StatCard label="Profile" value="Ready" hint="Manage your account from the sidebar." />
+        <StatCard icon={ClipboardList} label="Available Exams" value={exams.length} />
+        <StatCard icon={TrendingUp} tone="violet" label="Practice Hub" value="1" hint="Attempts and analytics are inside Practice Exams." />
+        <StatCard icon={UserRound} tone="green" label="Profile" value="Ready" hint="Manage your account from the sidebar." />
       </div>
 
       <div className="content-grid two-up">
@@ -57,6 +60,7 @@ export default function DashboardPage() {
           <p>Start exams, resume active attempts, review submitted attempts, and study analytics from one place.</p>
           <Link className="button button-primary" to="/practice">
             Open practice library
+            <ArrowRight aria-hidden="true" />
           </Link>
         </Card>
 
@@ -64,6 +68,7 @@ export default function DashboardPage() {
           <p>Keep your student profile clean so attempts and feedback stay attached to the right account.</p>
           <Link className="button button-ghost" to="/profile">
             Manage profile
+            <ArrowRight aria-hidden="true" />
           </Link>
         </Card>
       </div>

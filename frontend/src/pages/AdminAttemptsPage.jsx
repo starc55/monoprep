@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
+import { ClipboardList } from 'lucide-react';
 import AdminLayout from '../layouts/AdminLayout.jsx';
 import Card from '../components/ui/Card.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import { getAttempts } from '../services/adminService.js';
 import { formatDate } from '../utils/format.js';
@@ -12,6 +14,7 @@ export default function AdminAttemptsPage() {
   useEffect(() => {
     getAttempts()
       .then(setAttempts)
+      .catch(() => setAttempts([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -26,7 +29,7 @@ export default function AdminAttemptsPage() {
   return (
     <AdminLayout title="Attempts" subtitle="Monitor exam progress and submitted results.">
       <Card title="All Attempts">
-        <div className="table-wrap">
+        {attempts.length ? <div className="table-wrap">
           <table className="data-table">
             <thead>
               <tr>
@@ -49,7 +52,13 @@ export default function AdminAttemptsPage() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div> : (
+          <EmptyState
+            icon={ClipboardList}
+            title="No attempts submitted"
+            message="Student practice activity and results will be recorded here."
+          />
+        )}
       </Card>
     </AdminLayout>
   );

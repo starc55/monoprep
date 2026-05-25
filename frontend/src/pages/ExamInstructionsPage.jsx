@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { AlertCircle } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -15,15 +16,18 @@ export default function ExamInstructionsPage() {
   const [exam, setExam] = useState(null);
   const [loading, setLoading] = useState(true);
   const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState('');
 
   useEffect(() => {
     getExam(examId)
       .then(setExam)
+      .catch(() => setExam(null))
       .finally(() => setLoading(false));
   }, [examId]);
 
   async function handleStart() {
     setStarting(true);
+    setStartError('');
     try {
       if (document.documentElement.requestFullscreen) {
         await document.documentElement.requestFullscreen().catch(() => null);
@@ -32,6 +36,8 @@ export default function ExamInstructionsPage() {
       const attempt = await startAttempt(examId);
       initializeSession(attempt.id);
       navigate(`/attempts/${attempt.id}/exam`);
+    } catch {
+      setStartError('This attempt could not be started. Please return to Practice Exams and try again.');
     } finally {
       setStarting(false);
     }
@@ -67,6 +73,9 @@ export default function ExamInstructionsPage() {
       subtitle="Review the exam format, timing, and rules before entering the testing environment."
       actions={<Button onClick={handleStart}>{starting ? 'Starting...' : 'Start exam'}</Button>}
     >
+      {startError ? (
+        <p className="support-status error"><AlertCircle aria-hidden="true" /> {startError}</p>
+      ) : null}
       <div className="content-grid two-up">
         <Card title="Exam Rules">
           <ul className="clean-list">

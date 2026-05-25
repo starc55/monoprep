@@ -1,163 +1,300 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  BadgeCheck,
+  BarChart3,
+  ClipboardList,
+  Clock3,
+  Crown,
+  FileText,
+  LockKeyhole,
+  PlayCircle,
+  Sparkles,
+  Trophy
+} from 'lucide-react';
 import AppLayout from '../layouts/AppLayout.jsx';
-import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
-import StatCard from '../components/ui/StatCard.jsx';
-import AnalyticsBars from '../components/analytics/AnalyticsBars.jsx';
-import AnalyticsScoreTable from '../components/analytics/AnalyticsScoreTable.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
+import ProgressBar from '../components/ui/ProgressBar.jsx';
 import { getExams } from '../services/examService.js';
 import { getMyAttempts } from '../services/attemptService.js';
-import { getMyAnalytics } from '../services/analyticsService.js';
-import { formatDate } from '../utils/format.js';
+import { useAuthStore } from '../store/authStore.js';
+
+const tabs = [
+  { id: 'ALL', label: 'All Papers', icon: ClipboardList },
+  { id: 'FREE', label: 'Free Tests', icon: BadgeCheck },
+  { id: 'PREMIUM', label: 'Premium Tests', icon: Crown },
+  { id: 'IN_PROGRESS', label: 'In Progress', icon: Clock3 },
+  { id: 'COMPLETED', label: 'Completed', icon: Trophy }
+];
+
+const sortOptions = [
+  { value: 'newest', label: 'Newest to Oldest' },
+  { value: 'oldest', label: 'Oldest to Newest' },
+  { value: 'free', label: 'Free First' },
+  { value: 'premium', label: 'Premium First' },
+  { value: 'completed', label: 'Completed First' }
+];
+
+function isPremiumExam(exam) {
+  return exam.accessType === 'PREMIUM' || exam.isPremium === true;
+}
+
+function isCompletedAttempt(attempt) {
+  return attempt && attempt.status !== 'IN_PROGRESS';
+}
+
+function getExamAttempts(attempts, examId) {
+  const examAttempts = attempts.filter((attempt) => attempt.examId === examId);
+  const inProgressAttempt = examAttempts.find((attempt) => attempt.status === 'IN_PROGRESS') || null;
+  const completedAttempt = examAttempts.find((attempt) => attempt.status !== 'IN_PROGRESS') || null;
+
+  return {
+    attempt: inProgressAttempt || completedAttempt,
+    inProgressAttempt,
+    completedAttempt
+  };
+}
+
+function formatScore(score) {
+  return score === null || score === undefined ? 'Not taken' : `${score}%`;
+}
+
+function ExamCard({ row, canUsePremium }) {
+  const { exam, attempt, premium, newest } = row;
+  const inProgress = attempt?.status === 'IN_PROGRESS';
+  const completed = isCompletedAttempt(attempt);
+  const locked = premium && !canUsePremium;
+  const peopleTook = exam.peopleTookCount ?? exam.attemptsCount ?? exam.takenCount ?? '--';
+
+  return (
+    <motion.article
+      className={`paper-card ${premium ? 'paper-premium' : ''} ${completed ? 'paper-completed' : ''}`.trim()}
+      layout
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -4 }}
+      transition={{ duration: 0.2, ease: 'easeOut' }}
+    >
+      <div className="paper-head">
+        <span className="paper-icon"><FileText aria-hidden="true" /></span>
+        <div>
+          <h2>{exam.title}</h2>
+          <p>{exam.type?.replaceAll('_', ' ') || 'Practice paper'}</p>
+        </div>
+        <span className={`access-badge ${premium ? 'premium' : 'free'}`}>
+          {premium ? <Crown /> : <BadgeCheck />}
+          {premium ? 'Premium' : 'Free'}
+        </span>
+      </div>
+
+      <div className="paper-badges">
+        <span className="pill blue">Version {exam.sections?.length || 0} sections</span>
+        {newest ? (
+          <span className="pill amber"><Sparkles /> Newest Test</span>
+        ) : null}
+        {inProgress ? (
+          <span className="pill info"><Clock3 /> In Progress</span>
+        ) : null}
+        {completed ? (
+          <span className="pill success"><Trophy /> Completed</span>
+        ) : null}
+      </div>
+
+      {completed ? (
+        <div className="paper-score">
+          <div className="paper-score-head">
+            <div>
+              <span>Final score</span>
+              <strong>{formatScore(attempt.totalScore)}</strong>
+            </div>
+            <div className="score-sections">
+              <span>Reading/Writing <strong>{formatScore(attempt.readingWritingScore)}</strong></span>
+              <span>Math <strong>{formatScore(attempt.mathScore)}</strong></span>
+            </div>
+          </div>
+          <ProgressBar value={attempt.totalScore || 0} tone="green" />
+        </div>
+      ) : (
+        <div className="paper-metrics">
+          <div>
+            <span>People took</span>
+            <strong>{peopleTook}</strong>
+          </div>
+          <div>
+            <span>Your last score</span>
+            <strong>{formatScore(attempt?.totalScore)}</strong>
+          </div>
+        </div>
+      )}
+
+      <div className="paper-actions">
+        {locked ? (
+          <button type="button" className="button button-premium" disabled>
+            <LockKeyhole aria-hidden="true" /> Upgrade to Access
+          </button>
+        ) : inProgress ? (
+          <Link className="button button-primary" to={`/attempts/${attempt.id}/exam`}>
+            <PlayCircle aria-hidden="true" /> Continue Test
+          </Link>
+        ) : completed ? (
+          <Link className="button button-primary" to={`/attempts/${attempt.id}/review`}>
+            <BarChart3 aria-hidden="true" /> View Analytics
+          </Link>
+        ) : (
+          <Link className="button button-primary" to={`/exams/${exam.id}/instructions`}>
+            <PlayCircle aria-hidden="true" /> Start Test
+          </Link>
+        )}
+      </div>
+    </motion.article>
+  );
+}
 
 export default function PracticePage() {
+  const user = useAuthStore((state) => state.user);
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState({
-    exams: [],
-    attempts: [],
-    analytics: null
-  });
+  const [exams, setExams] = useState([]);
+  const [attempts, setAttempts] = useState([]);
+  const [activeTab, setActiveTab] = useState('ALL');
+  const [sortBy, setSortBy] = useState('newest');
 
   useEffect(() => {
     async function loadPracticeWorkspace() {
-      const [exams, attempts, analytics] = await Promise.all([
-        getExams(),
-        getMyAttempts(),
-        getMyAnalytics().catch(() => null)
-      ]);
-
-      setData({ exams, attempts, analytics });
+      const [examRows, attemptRows] = await Promise.all([getExams(), getMyAttempts()]);
+      setExams(examRows);
+      setAttempts(attemptRows);
       setLoading(false);
     }
 
     loadPracticeWorkspace().catch(() => setLoading(false));
   }, []);
 
+  const canUsePremium = Boolean(user?.isPremium || user?.accessType === 'PREMIUM' || user?.plan === 'PREMIUM');
+  const examRows = useMemo(
+    () => exams.map((exam, index) => {
+      const examAttempts = getExamAttempts(attempts, exam.id);
+      return {
+        exam,
+        ...examAttempts,
+        premium: isPremiumExam(exam),
+        newest: index < 3
+      };
+    }),
+    [attempts, exams]
+  );
+
+  const counts = useMemo(() => ({
+    ALL: examRows.length,
+    FREE: examRows.filter((row) => !row.premium).length,
+    PREMIUM: examRows.filter((row) => row.premium).length,
+    IN_PROGRESS: examRows.filter((row) => row.inProgressAttempt).length,
+    COMPLETED: examRows.filter((row) => row.completedAttempt).length
+  }), [examRows]);
+
+  const visibleRows = useMemo(() => {
+    const filtered = examRows.filter((row) => {
+      if (activeTab === 'FREE') return !row.premium;
+      if (activeTab === 'PREMIUM') return row.premium;
+      if (activeTab === 'IN_PROGRESS') return Boolean(row.inProgressAttempt);
+      if (activeTab === 'COMPLETED') return Boolean(row.completedAttempt);
+      return true;
+    });
+
+    const contextualRows = filtered.map((row) => {
+      if (activeTab === 'IN_PROGRESS') return { ...row, attempt: row.inProgressAttempt };
+      if (activeTab === 'COMPLETED') return { ...row, attempt: row.completedAttempt };
+      return row;
+    });
+
+    return contextualRows.sort((left, right) => {
+      const leftDate = new Date(left.exam.createdAt || 0).getTime();
+      const rightDate = new Date(right.exam.createdAt || 0).getTime();
+      if (sortBy === 'oldest') return leftDate - rightDate;
+      if (sortBy === 'free') return Number(left.premium) - Number(right.premium) || rightDate - leftDate;
+      if (sortBy === 'premium') return Number(right.premium) - Number(left.premium) || rightDate - leftDate;
+      if (sortBy === 'completed') return Number(Boolean(right.completedAttempt)) - Number(Boolean(left.completedAttempt)) || rightDate - leftDate;
+      return rightDate - leftDate;
+    });
+  }, [activeTab, examRows, sortBy]);
+
   if (loading) {
     return (
-      <AppLayout
-        title="Practice Library"
-        subtitle="Practice exams, attempts, score history, and analytics now live in one focused workspace."
-      >
-        <Loader label="Loading practice catalog..." />
+      <AppLayout title="Practice Exams" subtitle="Build confidence with timed papers and detailed score reviews.">
+        <Loader label="Loading practice papers..." />
       </AppLayout>
     );
   }
 
+  const emptyState = {
+    ALL: {
+      title: 'No practice exams available',
+      message: 'Published practice papers will appear here as soon as they become available.'
+    },
+    FREE: {
+      title: 'No free tests found',
+      message: 'There are no free practice papers in the library right now.'
+    },
+    PREMIUM: {
+      title: 'No premium tests found',
+      message: 'Premium practice papers will appear in this collection when released.'
+    },
+    IN_PROGRESS: {
+      title: 'No tests in progress',
+      message: 'Start a practice paper and you can return here to continue it later.'
+    },
+    COMPLETED: {
+      title: 'No completed attempts yet',
+      message: 'Finish a practice exam to unlock its score report and detailed analytics.'
+    }
+  }[activeTab];
+
   return (
     <AppLayout
-      title="Practice Library"
-      subtitle="Practice exams, attempts, score history, and analytics now live in one focused workspace."
+      title="Practice Exams"
+      subtitle="Hone your skills with official-style papers. Complete a test to unlock detailed performance review."
     >
-      <div className="stats-grid">
-        <StatCard label="Available Exams" value={data.exams.length} />
-        <StatCard label="Attempts" value={data.attempts.length} />
-        <StatCard label="Average Score" value={`${data.analytics?.overview?.averageScore || 0}%`} />
-        <StatCard label="Best Score" value={`${data.analytics?.overview?.bestScore || 0}%`} />
-      </div>
-
-      <div className="practice-section-head">
-        <div>
-          <h2>Practice Exams</h2>
-          <p>Start a new simulation or resume from the attempt history below.</p>
+      <section className="practice-toolbar" aria-label="Practice exam filters">
+        <div className="practice-tabs">
+          {tabs.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              type="button"
+              className={activeTab === id ? 'active' : ''}
+              onClick={() => setActiveTab(id)}
+            >
+              <Icon aria-hidden="true" />
+              {label}
+              <span>{counts[id]}</span>
+            </button>
+          ))}
         </div>
-      </div>
+        <label className="practice-sort">
+          <span>Sort</span>
+          <select value={sortBy} onChange={(event) => setSortBy(event.target.value)}>
+            {sortOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+      </section>
 
-      <div className="content-grid exam-grid">
-        {data.exams.map((exam) => (
-          <Card key={exam.id} title={exam.title} eyebrow={exam.type}>
-            <p>{exam.description}</p>
-            <div className="card-metadata">
-              <span>{exam.totalDuration} minutes</span>
-              <span>{exam.sections.length} sections</span>
-            </div>
-            <Link className="button button-primary" to={`/exams/${exam.id}/instructions`}>
-              View instructions
-            </Link>
-          </Card>
-        ))}
-      </div>
-
-      <Card title="Attempt History" className="practice-history-card">
-        {data.attempts.length ? (
-          <div className="table-wrap">
-            <table className="data-table">
-              <thead>
-                <tr>
-                  <th>Exam</th>
-                  <th>Status</th>
-                  <th>Score</th>
-                  <th>Started</th>
-                  <th>Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.attempts.map((attempt) => (
-                  <tr key={attempt.id}>
-                    <td>{attempt.examTitle}</td>
-                    <td>{attempt.status}</td>
-                    <td>{attempt.totalScore ?? '--'}%</td>
-                    <td>{formatDate(attempt.startedAt)}</td>
-                    <td>
-                      <Link to={attempt.status === 'IN_PROGRESS' ? `/attempts/${attempt.id}/exam` : `/attempts/${attempt.id}/review`}>
-                        {attempt.status === 'IN_PROGRESS' ? 'Resume' : 'Review'}
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p>No attempts yet. Start a practice exam to build your history.</p>
-        )}
-      </Card>
-
-      <div className="content-grid two-up practice-analytics-grid">
-        <Card title="Accuracy by Skill">
-          {data.analytics?.accuracyBySkill?.length ? (
-            <AnalyticsBars items={data.analytics.accuracyBySkill} />
-          ) : (
-            <p>Complete an exam to see skill-level accuracy.</p>
-          )}
-        </Card>
-
-        <Card title="Weak Topics">
-          {data.analytics?.weakTopics?.length ? (
-            <AnalyticsBars items={data.analytics.weakTopics} />
-          ) : (
-            <p>Weak topics will appear after your scored attempts.</p>
-          )}
-        </Card>
-      </div>
-
-      <div className="content-grid two-up">
-        <Card title="Score History">
-          {data.analytics?.scoreHistory?.length ? (
-            <AnalyticsScoreTable items={data.analytics.scoreHistory} />
-          ) : (
-            <p>Your score history will build here as you submit exams.</p>
-          )}
-        </Card>
-
-        <Card title="Time Per Section">
-          {data.analytics?.timePerSection?.length ? (
-            <div className="analytics-bars">
-              {data.analytics.timePerSection.map((item) => (
-                <div className="analytics-bar-row" key={item.section}>
-                  <div className="analytics-bar-label">
-                    <span>{item.section}</span>
-                    <strong>{item.seconds}s</strong>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p>Timing details will appear after submitted attempts.</p>
-          )}
-        </Card>
-      </div>
+      {visibleRows.length ? (
+        <div className="paper-grid">
+          {visibleRows.map((row) => (
+            <ExamCard key={row.exam.id} row={row} canUsePremium={canUsePremium} />
+          ))}
+        </div>
+      ) : (
+        <EmptyState
+          icon={ClipboardList}
+          title={emptyState.title}
+          message={emptyState.message}
+          actionLabel="View all papers"
+          actionTo="/practice"
+        />
+      )}
     </AppLayout>
   );
 }

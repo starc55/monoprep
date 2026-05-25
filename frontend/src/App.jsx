@@ -20,6 +20,9 @@ import AdminPassagesPage from './pages/AdminPassagesPage.jsx';
 import AdminUsersPage from './pages/AdminUsersPage.jsx';
 import AdminAttemptsPage from './pages/AdminAttemptsPage.jsx';
 import AdminStatsPage from './pages/AdminStatsPage.jsx';
+import AttemptsPage from './pages/AttemptsPage.jsx';
+import AnalyticsPage from './pages/AnalyticsPage.jsx';
+import SettingsPage from './pages/SettingsPage.jsx';
 
 function ProtectedRoute({ children }) {
   const token = useAuthStore((state) => state.token);
@@ -76,7 +79,13 @@ export default function App() {
       />
       <Route
         path="/attempts"
-        element={<Navigate to="/practice" replace />}
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <AttemptsPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/profile"
@@ -134,7 +143,23 @@ export default function App() {
       />
       <Route
         path="/analytics"
-        element={<Navigate to="/practice" replace />}
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <AnalyticsPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <SettingsPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
       />
       <Route
         path="/admin"

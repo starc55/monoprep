@@ -7,6 +7,7 @@ import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import QuestionImage from '../components/exam/renderers/QuestionImage.jsx';
 import { createOption, deleteOption, deleteQuestion, getQuestions, updateQuestion } from '../services/examService.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
 
@@ -19,7 +20,7 @@ export default function AdminQuestionsPage() {
     defaultValues: { questionText: '', skill: '', difficulty: 'MEDIUM', explanation: '', order: 1 }
   });
   const optionForm = useForm({
-    defaultValues: { label: 'A', text: '', order: 1 }
+    defaultValues: { label: 'A', text: '', imageUrl: '', order: 1 }
   });
 
   async function load() {
@@ -54,6 +55,7 @@ export default function AdminQuestionsPage() {
     optionForm.reset({
       label: '',
       text: '',
+      imageUrl: '',
       order: question.options.length + 1
     });
     setDialog({ mode: 'option', question });
@@ -88,6 +90,7 @@ export default function AdminQuestionsPage() {
         questionId: dialog.question.id,
         label: values.label.trim().toUpperCase(),
         text: values.text.trim(),
+        imageUrl: values.imageUrl.trim() || null,
         isCorrect: false,
         order: Number(values.order)
       });
@@ -143,7 +146,7 @@ export default function AdminQuestionsPage() {
                             await load();
                           }}
                         >
-                          {option.label}: {option.text}
+                          {option.label}: {option.text}{option.imageUrl ? ' / image' : ''}
                         </button>
                       ))}
                     </div>
@@ -205,9 +208,14 @@ export default function AdminQuestionsPage() {
             {dialog.question.passage ? <p><strong>Passage:</strong> {dialog.question.passage.title}</p> : null}
             <div className="preview-options">
               {dialog.question.options.map((option) => (
-                <p key={option.id}>
-                  <strong>{option.label}.</strong> {option.text}
-                </p>
+                <div key={option.id} className="preview-option-row">
+                  <p>
+                    <strong>{option.label}.</strong> {option.text}
+                  </p>
+                  {option.imageUrl ? (
+                    <QuestionImage src={option.imageUrl} alt={`Option ${option.label} image`} />
+                  ) : null}
+                </div>
               ))}
             </div>
             <p><strong>Explanation:</strong> {dialog.question.explanation}</p>
@@ -282,6 +290,10 @@ export default function AdminQuestionsPage() {
           <label className="form-field">
             <span>Option text</span>
             <input {...optionForm.register('text', { required: true })} />
+          </label>
+          <label className="form-field">
+            <span>Option image URL</span>
+            <input placeholder="/uploads/images/graph-choice.png" {...optionForm.register('imageUrl')} />
           </label>
           <label className="form-field">
             <span>Display order</span>

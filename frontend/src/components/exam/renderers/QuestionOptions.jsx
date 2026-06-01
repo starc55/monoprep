@@ -1,3 +1,5 @@
+import { resolveAssetUrl } from '../../../utils/assets.js';
+
 export default function QuestionOptions({
   question,
   value,
@@ -35,7 +37,14 @@ export default function QuestionOptions({
             onClick={() => toggleValue(option.label)}
           >
             <span className="choice-label">{option.label}</span>
-            <span>{option.text}</span>
+            <span className="choice-content">
+              <span className="choice-text">{option.text}</span>
+              {option.imageUrl ? (
+                <span className="choice-media">
+                  <img src={resolveAssetUrl(option.imageUrl)} alt={`Answer choice ${option.label} image`} />
+                </span>
+              ) : null}
+            </span>
           </button>
           <button
             type="button"

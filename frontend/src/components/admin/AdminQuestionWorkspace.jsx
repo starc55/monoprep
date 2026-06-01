@@ -59,9 +59,13 @@ function getDefaults(section) {
     correctOption: 'A',
     acceptedAnswers: '',
     optionA: '',
+    optionAImageUrl: '',
     optionB: '',
+    optionBImageUrl: '',
     optionC: '',
-    optionD: ''
+    optionCImageUrl: '',
+    optionD: '',
+    optionDImageUrl: ''
   };
 }
 
@@ -79,6 +83,7 @@ function buildOptions(values) {
     .map((label, index) => ({
       label,
       text: values[`option${label}`]?.trim() || '',
+      imageUrl: values[`option${label}ImageUrl`]?.trim() || null,
       isCorrect: values.correctOption.trim().toUpperCase() === label,
       order: index + 1
     }))
@@ -96,7 +101,7 @@ export default function AdminQuestionWorkspace({
   const [editorOpen, setEditorOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [status, setStatus] = useState(null);
-  const [imageUploading, setImageUploading] = useState(false);
+  const [uploadingImageField, setUploadingImageField] = useState('');
   const activeSection = sections.find((section) => section.id === activeSectionId) || sections[0];
   const form = useForm({ defaultValues: getDefaults(activeSection) });
   const values = useWatch({ control: form.control });
@@ -135,21 +140,21 @@ export default function AdminQuestionWorkspace({
     setEditorOpen(true);
   }
 
-  async function handleImageUpload(event) {
+  async function handleImageUpload(event, fieldName, successMessage) {
     const file = event.target.files?.[0];
     if (!file || !onUploadImage) return;
 
-    setImageUploading(true);
+    setUploadingImageField(fieldName);
     setStatus({ type: 'pending', message: 'Uploading image...' });
     try {
       const url = await onUploadImage(file);
-      form.setValue('imageUrl', url, { shouldDirty: true });
-      setStatus({ type: 'success', message: 'Image uploaded and attached to this math question.' });
+      form.setValue(fieldName, url, { shouldDirty: true });
+      setStatus({ type: 'success', message: successMessage });
     } catch (error) {
       event.target.value = '';
       setStatus({ type: 'error', message: getApiErrorMessage(error, 'Image could not be uploaded.') });
     } finally {
-      setImageUploading(false);
+      setUploadingImageField('');
     }
   }
 
@@ -341,8 +346,12 @@ export default function AdminQuestionWorkspace({
                       form={form}
                       isTextResponse={isTextResponse}
                       imageUrl={values.imageUrl}
-                      imageUploading={imageUploading}
-                      onImageUpload={handleImageUpload}
+                      imageUploading={uploadingImageField === 'imageUrl'}
+                      onImageUpload={(event) => handleImageUpload(
+                        event,
+                        'imageUrl',
+                        'Image uploaded and attached to this math question.'
+                      )}
                     />
                   ) : null}
                   {sectionType === 'listening' ? (
@@ -354,8 +363,16 @@ export default function AdminQuestionWorkspace({
                   <CommonAnswerFields
                     form={form}
                     skills={skills}
+                    values={values}
                     isTextResponse={isTextResponse}
                     usesOptions={usesOptions}
+                    supportsOptionImages={sectionType === 'math'}
+                    uploadingImageField={uploadingImageField}
+                    onOptionImageUpload={(event, fieldName, label) => handleImageUpload(
+                      event,
+                      fieldName,
+                      `Graph/image uploaded for option ${label}.`
+                    )}
                   />
                   {status ? (
                     <p className={`support-status ${status.type === 'pending' ? '' : status.type}`}>
@@ -364,8 +381,8 @@ export default function AdminQuestionWorkspace({
                   ) : null}
                   <div className="builder-save-actions">
                     <Button variant="ghost" onClick={() => setPreviewOpen(true)}>Preview student view</Button>
-                    <Button type="submit" disabled={status?.type === 'pending' || imageUploading}>
-                      {imageUploading ? 'Uploading image...' : status?.type === 'pending' ? 'Saving...' : 'Save Question'}
+                    <Button type="submit" disabled={status?.type === 'pending' || Boolean(uploadingImageField)}>
+                      {uploadingImageField ? 'Uploading image...' : status?.type === 'pending' ? 'Saving...' : 'Save Question'}
                     </Button>
                   </div>
                 </motion.form>
@@ -545,7 +562,16 @@ function QuestionPromptFields({ form, children }) {
   );
 }
 
-function CommonAnswerFields({ form, skills, isTextResponse, usesOptions }) {
+function CommonAnswerFields({
+  form,
+  skills,
+  values,
+  isTextResponse,
+  usesOptions,
+  supportsOptionImages,
+  uploadingImageField,
+  onOptionImageUpload
+}) {
   return (
     <fieldset className="editor-panel answer-editor">
       <legend>Scoring & Answer Key</legend>
@@ -571,13 +597,49 @@ function CommonAnswerFields({ form, skills, isTextResponse, usesOptions }) {
       </div>
       {usesOptions ? (
         <>
-          <div className="question-options-grid">
-            {['A', 'B', 'C', 'D'].map((label) => (
-              <label key={label} className="form-field">
-                <span>Option {label}</span>
-                <input {...form.register(`option${label}`, { required: true })} />
-              </label>
-            ))}
+          <div className={`question-options-grid ${supportsOptionImages ? 'with-option-media' : ''}`.trim()}>
+            {['A', 'B', 'C', 'D'].map((label) => {
+              const imageField = `option${label}ImageUrl`;
+              const imageUrl = values?.[imageField] || '';
+              const imageUploading = uploadingImageField === imageField;
+
+              return supportsOptionImages ? (
+                <div key={label} className="option-author-block">
+                  <label className="form-field">
+                    <span>Option {label}</span>
+                    <input placeholder={`Answer choice ${label}`} {...form.register(`option${label}`, { required: true })} />
+                  </label>
+                  <label className="form-field media-upload-field option-media-upload">
+                    <span>Graph/image for option {label}</span>
+                    <input
+                      key={imageUrl || `${imageField}-empty`}
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp,image/gif"
+                      disabled={imageUploading}
+                      onChange={(event) => onOptionImageUpload?.(event, imageField, label)}
+                    />
+                    <small>Use this when each answer choice is a separate graph.</small>
+                  </label>
+                  <label className="form-field">
+                    <span>Option {label} image URL / external URL</span>
+                    <input placeholder="/uploads/images/graph-choice.png" {...form.register(imageField)} />
+                  </label>
+                  {imageUrl ? (
+                    <div className="builder-image-preview option-image-preview">
+                      <QuestionImage src={imageUrl} alt={`Preview for option ${label}`} />
+                      <Button type="button" variant="ghost" onClick={() => form.setValue(imageField, '', { shouldDirty: true })}>
+                        Remove image
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
+              ) : (
+                <label key={label} className="form-field">
+                  <span>Option {label}</span>
+                  <input {...form.register(`option${label}`, { required: true })} />
+                </label>
+              );
+            })}
           </div>
           <label className="form-field compact-key-field">
             <span>Correct answer</span>

@@ -18,6 +18,7 @@ import StatCard from '../components/ui/StatCard.jsx';
 import ProgressBar from '../components/ui/ProgressBar.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import QuestionImage from '../components/exam/renderers/QuestionImage.jsx';
 import { getAttempt } from '../services/attemptService.js';
 import { generateFeedback } from '../services/aiService.js';
 import { getDisplayAnswer } from '../utils/exam.js';
@@ -264,6 +265,18 @@ export default function ExamReviewPage() {
               </span>
             </div>
             <p className="review-question-text">{selectedRow.question.questionText}</p>
+            {selectedRow.question.options?.some((option) => option.imageUrl) ? (
+              <div className="review-option-images">
+                {selectedRow.question.options.map((option) => (
+                  <div key={option.id || option.label} className="review-option-image">
+                    <p><strong>{option.label}.</strong> {option.text}</p>
+                    {option.imageUrl ? (
+                      <QuestionImage src={option.imageUrl} alt={`Option ${option.label} image`} />
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            ) : null}
             <div className="review-answer-grid">
               <div><span>Your answer</span><strong>{getDisplayAnswer(selectedRow.answer?.answer)}</strong></div>
               <div><span>Correct answer</span><strong>{getCorrectDisplay(selectedRow.question)}</strong></div>

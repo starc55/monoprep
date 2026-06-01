@@ -25,6 +25,16 @@ function ToolIcon({ name }) {
     );
   }
 
+  if (name === 'formula') {
+    return (
+      <svg {...commonProps}>
+        <path d="M5 19c2.8-3.5 4.1-8.2 4.1-14" />
+        <path d="M5 8h8" />
+        <path d="M12 14l3 3 4-5" />
+      </svg>
+    );
+  }
+
   if (name === 'help') {
     return (
       <svg {...commonProps}>
@@ -102,6 +112,9 @@ export default function ExamHeader({
   moreOpen,
   onToggleMore,
   onShowDirections,
+  showFormulaTool,
+  formulaOpen,
+  onOpenFormula,
   onOpenNotes,
   notesOpen,
   lineReaderActive,
@@ -133,6 +146,18 @@ export default function ExamHeader({
       </div>
 
       <div className="bluebook-tools">
+        {showFormulaTool ? (
+          <button
+            type="button"
+            className={`tool-button icon-tool ${formulaOpen ? 'active' : ''}`.trim()}
+            aria-label="Formula reference"
+            title="Formula reference"
+            aria-pressed={formulaOpen}
+            onClick={onOpenFormula}
+          >
+            <ToolIcon name="formula" />
+          </button>
+        ) : null}
         <button
           type="button"
           className={`tool-button icon-tool ${notesOpen ? 'active' : ''}`.trim()}

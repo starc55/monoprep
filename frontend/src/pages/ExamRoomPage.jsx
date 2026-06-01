@@ -74,6 +74,9 @@ export default function ExamRoomPage() {
   const currentSection = sections[session?.currentSectionIndex || 0];
   const currentQuestion = getCurrentQuestion(currentSection, session?.currentQuestionIndex || 0);
   const showPassagePanel = currentSection?.type === 'reading_writing';
+  const formulaReferenceText = currentSection?.type === 'math'
+    ? currentQuestion?.formulaText?.trim()
+    : '';
 
   const answerMap = useMemo(() => {
     const saved = Object.fromEntries((attempt?.answers || []).map((answer) => [answer.questionId, answer.answer]));
@@ -289,6 +292,11 @@ export default function ExamRoomPage() {
           'Open the question selector again to jump directly to any unanswered or flagged item.'
         ],
         action: 'Return to questions'
+      },
+      formula: {
+        title: 'Formula Reference',
+        referenceText: formulaReferenceText || 'No formula reference has been added for this item.',
+        action: 'Close'
       }
     };
 
@@ -388,6 +396,13 @@ export default function ExamRoomPage() {
         moreOpen={moreOpen}
         onToggleMore={() => setMoreOpen((value) => !value)}
         onShowDirections={() => setActiveDialog('directions')}
+        showFormulaTool={currentSection.type === 'math'}
+        formulaOpen={activeDialog === 'formula'}
+        onOpenFormula={() => {
+          setMoreOpen(false);
+          setNotesOpen(false);
+          setActiveDialog('formula');
+        }}
         onOpenNotes={() => setNotesOpen((value) => !value)}
         notesOpen={notesOpen}
         lineReaderActive={lineReaderActive}
@@ -521,11 +536,17 @@ export default function ExamRoomPage() {
           </Button>
         }
       >
-        <ul className="clean-list">
-          {(dialog?.body || []).map((item) => (
-            <li key={item}>{item}</li>
-          ))}
-        </ul>
+        {dialog?.referenceText ? (
+          <div className="formula-reference-dialog">
+            <p>{dialog.referenceText}</p>
+          </div>
+        ) : (
+          <ul className="clean-list">
+            {(dialog?.body || []).map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        )}
       </Modal>
       <SubmitConfirmModal
         open={activeDialog === 'exit'}

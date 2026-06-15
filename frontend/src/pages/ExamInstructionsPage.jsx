@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, BarChart3 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import AppLayout from '../layouts/AppLayout.jsx';
 import Card from '../components/ui/Card.jsx';
@@ -36,8 +36,13 @@ export default function ExamInstructionsPage() {
       const attempt = await startAttempt(examId);
       initializeSession(attempt.id);
       navigate(`/attempts/${attempt.id}/exam`);
-    } catch {
-      setStartError('This attempt could not be started. Please return to Practice Exams and try again.');
+    } catch (error) {
+      const previousAttemptId = error.response?.data?.details?.attemptId;
+      if (error.response?.status === 409 && previousAttemptId) {
+        navigate(`/attempts/${previousAttemptId}/review`, { replace: true });
+        return;
+      }
+      setStartError(error.response?.data?.message || 'This attempt could not be started. Please return to Practice Exams and try again.');
     } finally {
       setStarting(false);
     }
@@ -71,7 +76,7 @@ export default function ExamInstructionsPage() {
     <AppLayout
       title={exam.title}
       subtitle="Review the exam format, timing, and rules before entering the testing environment."
-      actions={<Button onClick={handleStart}>{starting ? 'Starting...' : 'Start exam'}</Button>}
+      actions={<Button onClick={handleStart} disabled={starting}>{starting ? 'Starting...' : 'Start exam'}</Button>}
     >
       {startError ? (
         <p className="support-status error"><AlertCircle aria-hidden="true" /> {startError}</p>
@@ -95,6 +100,13 @@ export default function ExamInstructionsPage() {
             ))}
           </ul>
         </Card>
+        {exam.type === 'FULL_LENGTH' ? (
+          <Card title="Full-length rule">
+            <p className="helper-copy">
+              <BarChart3 aria-hidden="true" /> Full-length tests can be completed once. Practice tests can be retaken for extra training.
+            </p>
+          </Card>
+        ) : null}
       </div>
     </AppLayout>
   );

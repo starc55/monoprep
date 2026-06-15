@@ -7,6 +7,7 @@ import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import ConfirmActionModal from '../components/ui/ConfirmActionModal.jsx';
 import QuestionImage from '../components/exam/renderers/QuestionImage.jsx';
 import { createOption, deleteOption, deleteQuestion, getQuestions, updateQuestion } from '../services/examService.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
@@ -16,6 +17,8 @@ export default function AdminQuestionsPage() {
   const [questions, setQuestions] = useState([]);
   const [dialog, setDialog] = useState(null);
   const [actionStatus, setActionStatus] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmPending, setConfirmPending] = useState(false);
   const editForm = useForm({
     defaultValues: { questionText: '', skill: '', difficulty: 'MEDIUM', explanation: '', order: 1 }
   });
@@ -59,6 +62,18 @@ export default function AdminQuestionsPage() {
       order: question.options.length + 1
     });
     setDialog({ mode: 'option', question });
+  }
+
+  async function runConfirmAction() {
+    if (!confirmAction) return;
+    setConfirmPending(true);
+    try {
+      await confirmAction.run();
+      await load();
+      setConfirmAction(null);
+    } finally {
+      setConfirmPending(false);
+    }
   }
 
   async function handleEdit(values) {
@@ -141,10 +156,12 @@ export default function AdminQuestionsPage() {
                           type="button"
                           key={option.id}
                           className="option-chip"
-                          onClick={async () => {
-                            await deleteOption(option.id);
-                            await load();
-                          }}
+                          onClick={() => setConfirmAction({
+                            title: 'Delete option?',
+                            message: `Option ${option.label} will be removed from this question.`,
+                            confirmLabel: 'Delete option',
+                            run: () => deleteOption(option.id)
+                          })}
                         >
                           {option.label}: {option.text}{option.imageUrl ? ' / image' : ''}
                         </button>
@@ -169,10 +186,12 @@ export default function AdminQuestionsPage() {
                     </Button>
                     <Button
                       variant="ghost"
-                      onClick={async () => {
-                        await deleteQuestion(question.id);
-                        await load();
-                      }}
+                      onClick={() => setConfirmAction({
+                        title: 'Delete question?',
+                        message: 'This question, answer choices, and saved student answers for it will be removed.',
+                        confirmLabel: 'Delete question',
+                        run: () => deleteQuestion(question.id)
+                      })}
                     >
                       Delete
                     </Button>
@@ -304,6 +323,15 @@ export default function AdminQuestionsPage() {
           ) : null}
         </form>
       </Modal>
+      <ConfirmActionModal
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        pending={confirmPending}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={runConfirmAction}
+      />
     </AdminLayout>
   );
 }

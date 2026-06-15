@@ -8,7 +8,6 @@ import { getApiErrorMessage } from '../../utils/apiError.js';
 const SECTION_TEMPLATES = {
   reading_writing: { title: 'Reading and Writing Module', duration: 32 },
   math: { title: 'Math Module', duration: 35 },
-  listening: { title: 'Listening Practice Module', duration: 20 },
   custom_practice: { title: 'Custom Practice Module', duration: 20 }
 };
 
@@ -29,7 +28,7 @@ export default function AdminExamBuilder({
       description: '',
       type: 'FULL_LENGTH',
       totalDuration: 87,
-      isPublished: false
+      isPublished: 'false'
     }
   });
   const sectionForm = useForm({
@@ -42,8 +41,9 @@ export default function AdminExamBuilder({
     }
   });
   const sections = exams.flatMap((exam) =>
-    exam.sections.map((section) => ({
+    exam.sections.filter((section) => section.type !== 'listening').map((section) => ({
       ...section,
+      examId: exam.id,
       examTitle: exam.title
     }))
   );
@@ -64,8 +64,18 @@ export default function AdminExamBuilder({
   async function handleCreateExam(values) {
     setExamStatus({ type: 'pending', message: 'Creating exam...' });
     try {
-      await onCreateExam({ ...values, totalDuration: Number(values.totalDuration) });
-      examForm.reset();
+      await onCreateExam({
+        ...values,
+        totalDuration: Number(values.totalDuration),
+        isPublished: values.isPublished === true || values.isPublished === 'true'
+      });
+      examForm.reset({
+        title: '',
+        description: '',
+        type: 'FULL_LENGTH',
+        totalDuration: 87,
+        isPublished: 'false'
+      });
       setExamStatus({ type: 'success', message: 'Exam created. Add modules next.' });
     } catch (error) {
       setExamStatus({ type: 'error', message: getApiErrorMessage(error, 'Exam could not be created.') });
@@ -128,9 +138,13 @@ export default function AdminExamBuilder({
                 <input type="number" min="1" {...examForm.register('totalDuration', { required: true, min: 1 })} />
               </label>
             </div>
-            <label className="checkbox-row">
-              <input type="checkbox" {...examForm.register('isPublished')} />
-              Published and available to students
+            <label className="form-field publish-select-card">
+              <span>Publish status</span>
+              <select {...examForm.register('isPublished')}>
+                <option value="false">Draft - publish later</option>
+                <option value="true">Auto published - students can start</option>
+              </select>
+              <small>Use draft while modules and questions are still being prepared.</small>
             </label>
             {examStatus ? (
               <p className={`support-status ${examStatus.type === 'pending' ? '' : examStatus.type}`}>

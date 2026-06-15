@@ -4,6 +4,7 @@ const optionalAssetUrlSchema = z
   .string()
   .url()
   .or(z.string().startsWith("/"))
+  .or(z.string().startsWith("data:image/"))
   .nullable()
   .optional();
 
@@ -30,6 +31,18 @@ export const loginSchema = z.object({
   password: z.string().min(6).max(64),
 });
 
+export const updateProfileSchema = z.object({
+  fullName: z.string().min(2).max(120).optional(),
+  username: z
+    .string()
+    .min(3)
+    .max(24)
+    .regex(/^[a-zA-Z0-9_]+$/, "Username can only contain letters, numbers, and underscores.")
+    .nullable()
+    .optional(),
+  avatarUrl: optionalAssetUrlSchema,
+});
+
 export const examSchema = z.object({
   title: z.string().min(3),
   description: z.string().min(10),
@@ -41,7 +54,7 @@ export const examSchema = z.object({
 export const sectionSchema = z.object({
   examId: z.string().min(1),
   title: z.string().min(2),
-  type: z.enum(["reading_writing", "math", "listening", "custom_practice"]),
+  type: z.enum(["reading_writing", "math", "custom_practice"]),
   duration: z.number().int().positive(),
   order: z.number().int().nonnegative(),
 });
@@ -115,3 +128,37 @@ export const supportMessageSchema = z.object({
   message: z.string().min(10).max(2000),
   pageUrl: z.string().max(500).optional(),
 });
+
+export const mentorSchema = z.object({
+  name: z.string().min(2).max(120),
+  subject: z.string().min(2).max(120),
+  bio: z.string().max(800).nullable().optional(),
+  imageUrl: optionalAssetUrlSchema,
+  telegram: z.string().max(120).nullable().optional(),
+  phone: z.string().max(80).nullable().optional(),
+  slots: z.array(z.string().min(1).max(40)).optional(),
+  rating: z.number().min(0).max(5).optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const mentorUpdateSchema = mentorSchema.partial();
+
+const questionBankChoiceSchema = z.object({
+  label: z.string().min(1).max(5),
+  text: z.string().min(1).max(2000),
+});
+
+export const questionBankItemSchema = z.object({
+  subject: z.enum(["Math", "Reading & Writing"]),
+  domain: z.string().min(2).max(120),
+  skill: z.string().min(2).max(120),
+  difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
+  prompt: z.string().min(5),
+  choices: z.array(questionBankChoiceSchema).nullable().optional(),
+  correctAnswer: z.any(),
+  explanation: z.string().max(3000).nullable().optional(),
+  isBluebook: z.boolean().optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const questionBankItemUpdateSchema = questionBankItemSchema.partial();

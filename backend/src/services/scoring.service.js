@@ -47,7 +47,9 @@ export function evaluateAnswer(question, answerValue) {
 export function buildScoreSummary(exam, questionResults) {
   const totalQuestions = questionResults.length;
   const correctCount = questionResults.filter((item) => item.isCorrect).length;
-  const sections = exam.sections.map((section) => {
+  const sections = exam.sections
+    .filter((section) => section.type !== 'listening')
+    .map((section) => {
     const sectionResults = questionResults.filter((item) => item.sectionId === section.id);
     const sectionCorrect = sectionResults.filter((item) => item.isCorrect).length;
 

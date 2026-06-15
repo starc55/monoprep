@@ -7,6 +7,7 @@ import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import ConfirmActionModal from '../components/ui/ConfirmActionModal.jsx';
 import { createPassage, deletePassage, getPassages, updatePassage } from '../services/examService.js';
 import { getApiErrorMessage } from '../utils/apiError.js';
 
@@ -15,6 +16,8 @@ export default function AdminPassagesPage() {
   const [passages, setPassages] = useState([]);
   const [dialog, setDialog] = useState(null);
   const [editStatus, setEditStatus] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmPending, setConfirmPending] = useState(false);
   const createForm = useForm({ defaultValues: { title: '', category: 'reading', content: '' } });
   const editForm = useForm({ defaultValues: { title: '', category: 'reading', content: '' } });
 
@@ -36,6 +39,18 @@ export default function AdminPassagesPage() {
       content: passage.content
     });
     setDialog({ mode: 'edit', passage });
+  }
+
+  async function runConfirmAction() {
+    if (!confirmAction) return;
+    setConfirmPending(true);
+    try {
+      await confirmAction.run();
+      await load();
+      setConfirmAction(null);
+    } finally {
+      setConfirmPending(false);
+    }
   }
 
   async function handleEdit(values) {
@@ -108,10 +123,12 @@ export default function AdminPassagesPage() {
                   </Button>
                   <Button
                     variant="ghost"
-                    onClick={async () => {
-                      await deletePassage(passage.id);
-                      await load();
-                    }}
+                    onClick={() => setConfirmAction({
+                      title: 'Delete passage?',
+                      message: `"${passage.title}" will be removed from the passage library. Existing questions may lose their attached stimulus.`,
+                      confirmLabel: 'Delete passage',
+                      run: () => deletePassage(passage.id)
+                    })}
                   >
                     Delete
                   </Button>
@@ -175,6 +192,15 @@ export default function AdminPassagesPage() {
           ) : null}
         </form>
       </Modal>
+      <ConfirmActionModal
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        pending={confirmPending}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={runConfirmAction}
+      />
     </AdminLayout>
   );
 }

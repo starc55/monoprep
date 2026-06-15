@@ -170,3 +170,63 @@ export async function getAdminAnalytics() {
     }))
   };
 }
+
+export async function getLeaderboard(userId) {
+  const attempts = await prisma.attempt.findMany({
+    where: {
+      status: {
+        in: ['SUBMITTED', 'REVIEWED']
+      }
+    },
+    include: {
+      user: {
+        select: {
+          id: true,
+          fullName: true,
+          username: true,
+          avatarUrl: true
+        }
+      },
+      exam: {
+        select: {
+          title: true,
+          type: true
+        }
+      }
+    },
+    orderBy: [{ totalScore: 'desc' }, { submittedAt: 'asc' }]
+  });
+
+  const bestByUser = new Map();
+  attempts.forEach((attempt) => {
+    const score = attempt.totalScore || 0;
+    const current = bestByUser.get(attempt.userId);
+    if (!current || score > current.score) {
+      bestByUser.set(attempt.userId, {
+        userId: attempt.userId,
+        name: attempt.user.username ? `@${attempt.user.username}` : attempt.user.fullName,
+        avatarUrl: attempt.user.avatarUrl,
+        score,
+        readingWritingScore: attempt.readingWritingScore || 0,
+        mathScore: attempt.mathScore || 0,
+        examTitle: attempt.exam.title,
+        examType: attempt.exam.type,
+        submittedAt: attempt.submittedAt || attempt.startedAt
+      });
+    }
+  });
+
+  const rows = [...bestByUser.values()]
+    .sort((a, b) => b.score - a.score || new Date(a.submittedAt) - new Date(b.submittedAt))
+    .map((row, index) => ({
+      ...row,
+      rank: index + 1,
+      isCurrentUser: row.userId === userId
+    }));
+
+  return {
+    participants: rows.length,
+    top: rows.slice(0, 10),
+    currentUser: rows.find((row) => row.userId === userId) || null
+  };
+}

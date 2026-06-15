@@ -9,9 +9,13 @@ const RegisterPage = lazy(() => import('./pages/RegisterPage.jsx'));
 const DashboardPage = lazy(() => import('./pages/DashboardPage.jsx'));
 const PracticePage = lazy(() => import('./pages/PracticePage.jsx'));
 const SupportPage = lazy(() => import('./pages/SupportPage.jsx'));
+const SupportSessionsPage = lazy(() => import('./pages/SupportSessionsPage.jsx'));
 const ProfilePage = lazy(() => import('./pages/ProfilePage.jsx'));
 const AttemptsPage = lazy(() => import('./pages/AttemptsPage.jsx'));
 const AnalyticsPage = lazy(() => import('./pages/AnalyticsPage.jsx'));
+const CompetitionPage = lazy(() => import('./pages/CompetitionPage.jsx'));
+const QuestionHubPage = lazy(() => import('./pages/QuestionHubPage.jsx'));
+const VocabularyPage = lazy(() => import('./pages/VocabularyPage.jsx'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage.jsx'));
 const ExamInstructionsPage = lazy(() => import('./pages/ExamInstructionsPage.jsx'));
 const ExamRoomPage = lazy(() => import('./pages/ExamRoomPage.jsx'));
@@ -20,7 +24,9 @@ const AIFeedbackPage = lazy(() => import('./pages/AIFeedbackPage.jsx'));
 const AdminPanelPage = lazy(() => import('./pages/AdminPanelPage.jsx'));
 const AdminExamsPage = lazy(() => import('./pages/AdminExamsPage.jsx'));
 const AdminQuestionsPage = lazy(() => import('./pages/AdminQuestionsPage.jsx'));
+const AdminQuestionBankPage = lazy(() => import('./pages/AdminQuestionBankPage.jsx'));
 const AdminPassagesPage = lazy(() => import('./pages/AdminPassagesPage.jsx'));
+const AdminMentorsPage = lazy(() => import('./pages/AdminMentorsPage.jsx'));
 const AdminUsersPage = lazy(() => import('./pages/AdminUsersPage.jsx'));
 const AdminAttemptsPage = lazy(() => import('./pages/AdminAttemptsPage.jsx'));
 const AdminStatsPage = lazy(() => import('./pages/AdminStatsPage.jsx'));
@@ -86,6 +92,66 @@ export default function App() {
           <ProtectedRoute>
             <StudentRoute>
               <AttemptsPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/question-hub"
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <QuestionHubPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/vocabulary"
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <VocabularyPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/competition"
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <CompetitionPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/support-sessions"
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <SupportSessionsPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/support-sessions/schedules"
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <SupportSessionsPage />
+            </StudentRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/support-sessions/mentors"
+        element={
+          <ProtectedRoute>
+            <StudentRoute>
+              <SupportSessionsPage />
             </StudentRoute>
           </ProtectedRoute>
         }
@@ -195,11 +261,31 @@ export default function App() {
         }
       />
       <Route
+        path="/admin/question-hub"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminQuestionBankPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
         path="/admin/passages"
         element={
           <ProtectedRoute>
             <AdminRoute>
               <AdminPassagesPage />
+            </AdminRoute>
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/mentors"
+        element={
+          <ProtectedRoute>
+            <AdminRoute>
+              <AdminMentorsPage />
             </AdminRoute>
           </ProtectedRoute>
         }

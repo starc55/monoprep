@@ -8,6 +8,7 @@ import {
   ChevronRight,
   ClipboardList,
   FileQuestion,
+  GraduationCap,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -23,7 +24,9 @@ const adminNavigation = [
   { to: '/admin', label: 'Overview', icon: LayoutDashboard, end: true },
   { to: '/admin/exams', label: 'Exams', icon: ClipboardList },
   { to: '/admin/questions', label: 'Questions', icon: FileQuestion },
+  { to: '/admin/question-hub', label: 'Question Hub', icon: GraduationCap },
   { to: '/admin/passages', label: 'Passages', icon: BookOpen },
+  { to: '/admin/mentors', label: 'Mentors', icon: UsersRound },
   { to: '/admin/users', label: 'Users', icon: UsersRound },
   { to: '/admin/attempts', label: 'Attempts', icon: Trophy },
   { to: '/admin/stats', label: 'Statistics', icon: BarChart3 }

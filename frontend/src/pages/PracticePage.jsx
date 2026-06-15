@@ -10,6 +10,7 @@ import {
   FileText,
   LockKeyhole,
   PlayCircle,
+  RefreshCw,
   Sparkles,
   Trophy
 } from 'lucide-react';
@@ -37,6 +38,15 @@ const sortOptions = [
   { value: 'completed', label: 'Completed First' }
 ];
 
+function withTimeout(promise, timeoutMs, label) {
+  let timeoutId;
+  const timeout = new Promise((_, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error(`${label} request timed out`)), timeoutMs);
+  });
+
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timeoutId));
+}
+
 function isPremiumExam(exam) {
   return exam.accessType === 'PREMIUM' || exam.isPremium === true;
 }
@@ -62,11 +72,14 @@ function formatScore(score) {
 }
 
 function ExamCard({ row, canUsePremium }) {
-  const { exam, attempt, premium, newest } = row;
+  const { exam, attempt, premium, newest, paperNumber } = row;
   const inProgress = attempt?.status === 'IN_PROGRESS';
   const completed = isCompletedAttempt(attempt);
   const locked = premium && !canUsePremium;
+  const isFullLength = exam.type === 'FULL_LENGTH';
+  const fullLengthFinished = completed && isFullLength;
   const peopleTook = exam.peopleTookCount ?? exam.attemptsCount ?? exam.takenCount ?? '--';
+  const questionsCount = exam.sections?.reduce((total, section) => total + (section.questionsCount || section.questions?.length || 0), 0) || 0;
 
   return (
     <motion.article
@@ -80,8 +93,8 @@ function ExamCard({ row, canUsePremium }) {
       <div className="paper-head">
         <span className="paper-icon"><FileText aria-hidden="true" /></span>
         <div>
-          <h2>{exam.title}</h2>
-          <p>{exam.type?.replaceAll('_', ' ') || 'Practice paper'}</p>
+          <h2>Paper #{paperNumber}</h2>
+          <p>{exam.title}</p>
         </div>
         <span className={`access-badge ${premium ? 'premium' : 'free'}`}>
           {premium ? <Crown /> : <BadgeCheck />}
@@ -90,10 +103,11 @@ function ExamCard({ row, canUsePremium }) {
       </div>
 
       <div className="paper-badges">
-        <span className="pill blue">Version {exam.sections?.length || 0} sections</span>
+        <span className="pill blue">Version {exam.difficultyLabel || (paperNumber % 2 ? 'Hard' : 'May Predictions')}</span>
         {newest ? (
           <span className="pill amber"><Sparkles /> Newest Test</span>
         ) : null}
+        <span className="pill">{isFullLength ? 'Full Length' : 'Practice Test'}</span>
         {inProgress ? (
           <span className="pill info"><Clock3 /> In Progress</span>
         ) : null}
@@ -124,7 +138,15 @@ function ExamCard({ row, canUsePremium }) {
           </div>
           <div>
             <span>Your last score</span>
-            <strong>{formatScore(attempt?.totalScore)}</strong>
+            <strong>{formatScore(exam.lastScore ?? attempt?.totalScore)}</strong>
+          </div>
+          <div>
+            <span>Questions</span>
+            <strong>{questionsCount || '--'}</strong>
+          </div>
+          <div>
+            <span>Minutes</span>
+            <strong>{exam.totalDuration || '--'}</strong>
           </div>
         </div>
       )}
@@ -138,10 +160,19 @@ function ExamCard({ row, canUsePremium }) {
           <Link className="button button-primary" to={`/attempts/${attempt.id}/exam`}>
             <PlayCircle aria-hidden="true" /> Continue Test
           </Link>
-        ) : completed ? (
+        ) : fullLengthFinished ? (
           <Link className="button button-primary" to={`/attempts/${attempt.id}/review`}>
             <BarChart3 aria-hidden="true" /> View Analytics
           </Link>
+        ) : completed ? (
+          <div className="paper-action-split">
+            <Link className="button button-primary" to={`/exams/${exam.id}/instructions`}>
+              <PlayCircle aria-hidden="true" /> Start Again
+            </Link>
+            <Link className="button button-ghost" to={`/attempts/${attempt.id}/review`}>
+              Last Result
+            </Link>
+          </div>
         ) : (
           <Link className="button button-primary" to={`/exams/${exam.id}/instructions`}>
             <PlayCircle aria-hidden="true" /> Start Test
@@ -159,17 +190,44 @@ export default function PracticePage() {
   const [attempts, setAttempts] = useState([]);
   const [activeTab, setActiveTab] = useState('ALL');
   const [sortBy, setSortBy] = useState('newest');
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
-    async function loadPracticeWorkspace() {
-      const [examRows, attemptRows] = await Promise.all([getExams(), getMyAttempts()]);
-      setExams(examRows);
-      setAttempts(attemptRows);
-      setLoading(false);
+    let active = true;
+
+    async function loadExamRows() {
+      setLoading(true);
+      setLoadError('');
+      try {
+        const examRows = await withTimeout(getExams(), 12000, 'Practice exams');
+        if (!active) return;
+        setExams(Array.isArray(examRows) ? examRows : []);
+      } catch (error) {
+        if (!active) return;
+        setExams([]);
+        setLoadError(error?.response?.data?.message || error.message || 'Practice exams could not be loaded.');
+      } finally {
+        if (active) setLoading(false);
+      }
     }
 
-    loadPracticeWorkspace().catch(() => setLoading(false));
-  }, []);
+    async function loadAttemptRows() {
+      try {
+        const attemptRows = await withTimeout(getMyAttempts(), 12000, 'Attempts');
+        if (active) setAttempts(Array.isArray(attemptRows) ? attemptRows : []);
+      } catch (_error) {
+        if (active) setAttempts([]);
+      }
+    }
+
+    loadExamRows();
+    loadAttemptRows();
+
+    return () => {
+      active = false;
+    };
+  }, [reloadKey]);
 
   const canUsePremium = Boolean(user?.isPremium || user?.accessType === 'PREMIUM' || user?.plan === 'PREMIUM');
   const examRows = useMemo(
@@ -179,7 +237,8 @@ export default function PracticePage() {
         exam,
         ...examAttempts,
         premium: isPremiumExam(exam),
-        newest: index < 3
+        newest: index < 3,
+        paperNumber: Math.max(1, 85 - index)
       };
     }),
     [attempts, exams]
@@ -279,6 +338,25 @@ export default function PracticePage() {
           </select>
         </label>
       </section>
+
+      {loadError ? (
+        <div className="practice-load-alert" role="alert">
+          <span>{loadError}</span>
+          <button type="button" onClick={() => setReloadKey((value) => value + 1)}>
+            <RefreshCw aria-hidden="true" /> Retry
+          </button>
+        </div>
+      ) : null}
+
+      <div className="practice-bank-callout">
+        <div>
+          <span className="profile-chip"><FileText aria-hidden="true" /> Question Bank Session</span>
+          <strong>Build a filtered mini exam from practice-test questions</strong>
+        </div>
+        <Link className="button button-secondary" to="/question-hub">
+          <PlayCircle aria-hidden="true" /> Open Question Hub
+        </Link>
+      </div>
 
       {visibleRows.length ? (
         <div className="paper-grid">

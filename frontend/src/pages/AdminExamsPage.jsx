@@ -8,6 +8,7 @@ import Card from '../components/ui/Card.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import ConfirmActionModal from '../components/ui/ConfirmActionModal.jsx';
 import { getApiErrorMessage } from '../utils/apiError.js';
 import {
   createExam,
@@ -29,6 +30,8 @@ export default function AdminExamsPage() {
   const [passages, setPassages] = useState([]);
   const [editingSection, setEditingSection] = useState(null);
   const [sectionStatus, setSectionStatus] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
+  const [confirmPending, setConfirmPending] = useState(false);
   const sectionForm = useForm({
     defaultValues: { title: '', type: 'reading_writing', duration: 30, order: 1 }
   });
@@ -57,6 +60,18 @@ export default function AdminExamsPage() {
       duration: section.duration,
       order: section.order
     });
+  }
+
+  async function runConfirmAction() {
+    if (!confirmAction) return;
+    setConfirmPending(true);
+    try {
+      await confirmAction.run();
+      await load();
+      setConfirmAction(null);
+    } finally {
+      setConfirmPending(false);
+    }
   }
 
   async function handleSectionUpdate(values) {
@@ -148,10 +163,12 @@ export default function AdminExamsPage() {
                       </Button>
                       <Button
                         variant="ghost"
-                        onClick={async () => {
-                          await deleteExam(exam.id);
-                          await load();
-                        }}
+                        onClick={() => setConfirmAction({
+                          title: 'Delete exam?',
+                          message: `"${exam.title}" and all of its sections, questions, answers, and attempts will be removed.`,
+                          confirmLabel: 'Delete exam',
+                          run: () => deleteExam(exam.id)
+                        })}
                       >
                         Delete
                       </Button>
@@ -185,10 +202,12 @@ export default function AdminExamsPage() {
                     </Button>
                     <Button
                       variant="ghost"
-                      onClick={async () => {
-                        await deleteSection(section.id);
-                        await load();
-                      }}
+                      onClick={() => setConfirmAction({
+                        title: 'Delete section?',
+                        message: `"${section.title}" and its questions will be removed from this exam.`,
+                        confirmLabel: 'Delete section',
+                        run: () => deleteSection(section.id)
+                      })}
                     >
                       Delete
                     </Button>
@@ -237,7 +256,6 @@ export default function AdminExamsPage() {
             <select {...sectionForm.register('type')}>
               <option value="reading_writing">reading_writing</option>
               <option value="math">math</option>
-              <option value="listening">listening</option>
               <option value="custom_practice">custom_practice</option>
             </select>
           </label>
@@ -254,6 +272,15 @@ export default function AdminExamsPage() {
           ) : null}
         </form>
       </Modal>
+      <ConfirmActionModal
+        open={Boolean(confirmAction)}
+        title={confirmAction?.title}
+        message={confirmAction?.message}
+        confirmLabel={confirmAction?.confirmLabel}
+        pending={confirmPending}
+        onCancel={() => setConfirmAction(null)}
+        onConfirm={runConfirmAction}
+      />
     </AdminLayout>
   );
 }

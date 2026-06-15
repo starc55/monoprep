@@ -1,5 +1,15 @@
 import { formatDate } from '../../utils/format.js';
 
+function scoreToSatTotal(value) {
+  if (!value) return 400;
+  return value > 100 ? value : Math.round(400 + (value / 100) * 1200);
+}
+
+function scoreToSatSection(value) {
+  if (!value) return 200;
+  return value > 100 ? value : Math.round(200 + (value / 100) * 600);
+}
+
 export default function AnalyticsScoreTable({ items }) {
   return (
     <div className="table-wrap">
@@ -11,7 +21,6 @@ export default function AnalyticsScoreTable({ items }) {
             <th>Total</th>
             <th>RW</th>
             <th>Math</th>
-            <th>Listening</th>
           </tr>
         </thead>
         <tbody>
@@ -19,10 +28,9 @@ export default function AnalyticsScoreTable({ items }) {
             <tr key={item.attemptId}>
               <td>{formatDate(item.date)}</td>
               <td>{item.examTitle}</td>
-              <td>{item.totalScore}%</td>
-              <td>{item.readingWritingScore}%</td>
-              <td>{item.mathScore}%</td>
-              <td>{item.listeningScore}%</td>
+              <td>{scoreToSatTotal(item.totalScore)}</td>
+              <td>{scoreToSatSection(item.readingWritingScore)}</td>
+              <td>{scoreToSatSection(item.mathScore)}</td>
             </tr>
           ))}
         </tbody>

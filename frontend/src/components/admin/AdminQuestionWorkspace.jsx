@@ -14,13 +14,11 @@ const MATH_SKILLS = [
   'linear_equations', 'systems', 'functions', 'geometry', 'trigonometry',
   'statistics', 'probability', 'advanced_math', 'problem_solving'
 ];
-const LISTENING_SKILLS = ['main_idea', 'detail', 'inference', 'vocabulary', 'speaker_purpose'];
 const DEFAULT_SKILLS = ['reading', 'writing', 'algebra', 'analysis'];
 
 function getSkills(sectionType) {
   if (sectionType === 'reading_writing') return READING_SKILLS;
   if (sectionType === 'math') return MATH_SKILLS;
-  if (sectionType === 'listening') return LISTENING_SKILLS;
   return DEFAULT_SKILLS;
 }
 
@@ -28,7 +26,6 @@ function titleForType(type) {
   return {
     reading_writing: 'Reading & Writing Builder',
     math: 'Math Builder',
-    listening: 'Listening Builder',
     custom_practice: 'Custom Practice Builder'
   }[type] || 'Question Builder';
 }
@@ -98,19 +95,43 @@ export default function AdminQuestionWorkspace({
   onUploadImage
 }) {
   const [activeSectionId, setActiveSectionId] = useState(sections[0]?.id || '');
+  const [selectedExamId, setSelectedExamId] = useState(sections[0]?.examId || '');
   const [editorOpen, setEditorOpen] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [status, setStatus] = useState(null);
   const [uploadingImageField, setUploadingImageField] = useState('');
-  const activeSection = sections.find((section) => section.id === activeSectionId) || sections[0];
+  const examOptions = useMemo(() => {
+    const byExam = new Map();
+    sections.forEach((section) => {
+      const id = section.examId || section.examTitle;
+      if (!id) return;
+      const current = byExam.get(id) || {
+        id,
+        title: section.examTitle || 'Untitled test',
+        modules: 0,
+        questions: 0
+      };
+      current.modules += 1;
+      current.questions += section.questionsCount || 0;
+      byExam.set(id, current);
+    });
+    return Array.from(byExam.values());
+  }, [sections]);
+  const visibleSections = useMemo(() => {
+    if (!selectedExamId) return sections;
+    return sections.filter((section) => (section.examId || section.examTitle) === selectedExamId);
+  }, [sections, selectedExamId]);
+  const activeSection =
+    visibleSections.find((section) => section.id === activeSectionId)
+    || sections.find((section) => section.id === activeSectionId)
+    || visibleSections[0]
+    || sections[0];
   const form = useForm({ defaultValues: getDefaults(activeSection) });
   const values = useWatch({ control: form.control });
   const sectionType = activeSection?.type;
   const responseType = sectionType === 'reading_writing'
     ? 'single_choice'
-    : sectionType === 'listening'
-      ? 'single_choice'
-      : values.responseType;
+    : values.responseType;
   const isTextResponse = responseType === 'text_input';
   const usesOptions = !isTextResponse;
   const skills = getSkills(sectionType);
@@ -118,13 +139,35 @@ export default function AdminQuestionWorkspace({
   useEffect(() => {
     if (!sections.length) {
       setActiveSectionId('');
+      setSelectedExamId('');
       setEditorOpen(false);
       return;
     }
-    if (!sections.some((section) => section.id === activeSectionId)) {
-      setActiveSectionId(sections[0].id);
+    const selectedStillExists = selectedExamId
+      ? sections.some((section) => (section.examId || section.examTitle) === selectedExamId)
+      : false;
+    const nextExamId = selectedStillExists ? selectedExamId : (sections[0].examId || sections[0].examTitle || '');
+    if (nextExamId !== selectedExamId) {
+      setSelectedExamId(nextExamId);
     }
-  }, [activeSectionId, sections]);
+    const nextSections = nextExamId
+      ? sections.filter((section) => (section.examId || section.examTitle) === nextExamId)
+      : sections;
+    if (!nextSections.some((section) => section.id === activeSectionId)) {
+      setActiveSectionId(nextSections[0]?.id || sections[0].id);
+    }
+  }, [activeSectionId, sections, selectedExamId]);
+
+  function selectExam(event) {
+    const nextExamId = event.target.value;
+    const nextSection = sections.find((section) => (section.examId || section.examTitle) === nextExamId);
+    setSelectedExamId(nextExamId);
+    if (nextSection) {
+      setActiveSectionId(nextSection.id);
+    }
+    setEditorOpen(false);
+    setStatus(null);
+  }
 
   useEffect(() => {
     if (activeSection && editorOpen) {
@@ -177,9 +220,7 @@ export default function AdminQuestionWorkspace({
       id: 'preview-question',
       type: sectionType === 'reading_writing'
         ? 'passage_question'
-        : sectionType === 'listening'
-          ? 'audio_question'
-          : responseType,
+        : responseType,
       skill: values.skill,
       difficulty: values.difficulty,
       questionText: values.questionText || 'Your question prompt appears here.',
@@ -244,19 +285,15 @@ export default function AdminQuestionWorkspace({
         passageId,
         type: sectionType === 'reading_writing'
           ? 'passage_question'
-          : sectionType === 'listening'
-            ? 'audio_question'
-            : responseType,
+          : responseType,
         skill: submittedValues.skill,
         difficulty: submittedValues.difficulty,
         questionText: submittedValues.questionText.trim(),
-        audioUrl: sectionType === 'listening' ? submittedValues.audioUrl || null : null,
-        audioTitle: sectionType === 'listening' ? submittedValues.audioTitle || null : null,
-        instructions: sectionType === 'listening' ? submittedValues.instructions || null : null,
-        transcript: sectionType === 'listening' ? submittedValues.transcript || null : null,
-        audioReplayLimit: sectionType === 'listening' && submittedValues.audioReplayLimit !== 'unlimited'
-          ? Number(submittedValues.audioReplayLimit)
-          : null,
+        audioUrl: null,
+        audioTitle: null,
+        instructions: null,
+        transcript: null,
+        audioReplayLimit: null,
         imageUrl: sectionType === 'math' ? submittedValues.imageUrl || null : null,
         formulaText: sectionType === 'math' ? submittedValues.formulaText || null : null,
         tableData: sectionType === 'math' ? tableData : null,
@@ -281,8 +318,20 @@ export default function AdminQuestionWorkspace({
           <h3>3. Author Questions</h3>
           <p>Select a module to load its SAT-specific builder.</p>
         </div>
+        {examOptions.length ? (
+          <label className="form-field builder-test-dropdown">
+            <span>Test</span>
+            <select value={selectedExamId} onChange={selectExam}>
+              {examOptions.map((exam) => (
+                <option key={exam.id} value={exam.id}>
+                  {exam.title} - {exam.modules} modules / {exam.questions} questions
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <div className="builder-section-list">
-          {sections.map((section) => (
+          {visibleSections.map((section) => (
             <button
               type="button"
               key={section.id}
@@ -305,7 +354,7 @@ export default function AdminQuestionWorkspace({
         {!activeSection ? (
           <div className="builder-empty">
             <h3>No modules yet</h3>
-            <p>Create an exam and add a Reading & Writing, Math, Listening, or Custom Practice module first.</p>
+            <p>Create an exam and add a Reading & Writing, Math, or Custom Practice module first.</p>
           </div>
         ) : (
           <>
@@ -353,9 +402,6 @@ export default function AdminQuestionWorkspace({
                         'Image uploaded and attached to this math question.'
                       )}
                     />
-                  ) : null}
-                  {sectionType === 'listening' ? (
-                    <ListeningFields form={form} />
                   ) : null}
                   {sectionType === 'custom_practice' ? (
                     <CustomFields form={form} isTextResponse={isTextResponse} />
@@ -494,41 +540,6 @@ function MathFields({ form, isTextResponse, imageUrl, imageUploading, onImageUpl
         </label>
         {isTextResponse ? <p className="helper-copy">Numeric answers are normalized before scoring.</p> : null}
       </fieldset>
-    </div>
-  );
-}
-
-function ListeningFields({ form }) {
-  return (
-    <div className="listening-editor-grid">
-      <fieldset className="editor-panel audio-editor">
-        <legend>Audio Source</legend>
-        <label className="form-field">
-          <span>Audio title</span>
-          <input {...form.register('audioTitle', { required: true, minLength: 2 })} />
-        </label>
-        <label className="form-field">
-          <span>Audio upload / URL</span>
-          <input placeholder="/uploads/audio/lesson.wav" {...form.register('audioUrl', { required: true })} />
-        </label>
-        <label className="form-field">
-          <span>Instructions</span>
-          <textarea {...form.register('instructions', { required: true, minLength: 3 })} />
-        </label>
-        <label className="form-field">
-          <span>Transcript (hidden during exam)</span>
-          <textarea {...form.register('transcript')} />
-        </label>
-        <label className="form-field">
-          <span>Replay limit</span>
-          <select {...form.register('audioReplayLimit')}>
-            <option value="unlimited">Unlimited</option>
-            <option value="1">Once</option>
-            <option value="2">Twice</option>
-          </select>
-        </label>
-      </fieldset>
-      <QuestionPromptFields form={form} />
     </div>
   );
 }

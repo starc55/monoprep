@@ -6,6 +6,7 @@ import {
   BookOpen,
   ClipboardList,
   FileQuestion,
+  GraduationCap,
   ShieldAlert,
   Trophy,
   UsersRound
@@ -20,7 +21,9 @@ import { getStats } from '../services/adminService.js';
 const adminModules = [
   { title: 'Exams', path: '/admin/exams', copy: 'Build sections, questions, options, and publishing status.', icon: ClipboardList },
   { title: 'Questions', path: '/admin/questions', copy: 'Audit skills, difficulty, answer keys, and options.', icon: FileQuestion },
+  { title: 'Question Hub', path: '/admin/question-hub', copy: 'Add quick-practice items students can solve anytime.', icon: GraduationCap },
   { title: 'Passages', path: '/admin/passages', copy: 'Create and maintain stimulus material.', icon: BookOpen },
+  { title: 'Mentors', path: '/admin/mentors', copy: 'Publish support-session teachers, contacts, and slots.', icon: UsersRound },
   { title: 'Users', path: '/admin/users', copy: 'View student and admin profiles.', icon: UsersRound },
   { title: 'Attempts', path: '/admin/attempts', copy: 'Monitor active and submitted attempts.', icon: Trophy },
   { title: 'Stats', path: '/admin/stats', copy: 'Review platform-level performance.', icon: BarChart3 }

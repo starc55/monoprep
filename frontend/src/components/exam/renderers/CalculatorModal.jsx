@@ -1,123 +1,63 @@
-import { useState } from 'react';
-import Button from '../../ui/Button.jsx';
-import Modal from '../../ui/Modal.jsx';
-
-const BUTTONS = [
-  ['C', '(', ')', '%'],
-  ['7', '8', '9', '/'],
-  ['4', '5', '6', '*'],
-  ['1', '2', '3', '-'],
-  ['sqrt', '0', '.', '+']
-];
-
-function calculateExpression(expression) {
-  let index = 0;
-
-  function parseExpression() {
-    let value = parseTerm();
-    while (expression[index] === '+' || expression[index] === '-') {
-      const operator = expression[index++];
-      const nextValue = parseTerm();
-      value = operator === '+' ? value + nextValue : value - nextValue;
-    }
-    return value;
-  }
-
-  function parseTerm() {
-    let value = parseFactor();
-    while (expression[index] === '*' || expression[index] === '/') {
-      const operator = expression[index++];
-      const nextValue = parseFactor();
-      value = operator === '*' ? value * nextValue : value / nextValue;
-    }
-    return value;
-  }
-
-  function parseFactor() {
-    let value;
-    if (expression.startsWith('sqrt(', index)) {
-      index += 5;
-      value = Math.sqrt(parseExpression());
-      if (expression[index++] !== ')') throw new Error('Missing parenthesis');
-    } else if (expression[index] === '(') {
-      index += 1;
-      value = parseExpression();
-      if (expression[index++] !== ')') throw new Error('Missing parenthesis');
-    } else if (expression[index] === '-') {
-      index += 1;
-      value = -parseFactor();
-    } else {
-      const number = expression.slice(index).match(/^\d*\.?\d+/)?.[0];
-      if (!number) throw new Error('Invalid input');
-      index += number.length;
-      value = Number(number);
-    }
-    while (expression[index] === '%') {
-      value /= 100;
-      index += 1;
-    }
-    return value;
-  }
-
-  const result = parseExpression();
-  if (index !== expression.length || !Number.isFinite(result)) {
-    throw new Error('Invalid input');
-  }
-  return String(Number(result.toFixed(10)));
-}
+import { useEffect, useRef, useState } from 'react';
+import { Calculator, Grip, X } from 'lucide-react';
 
 export default function CalculatorModal({ open, onClose }) {
-  const [expression, setExpression] = useState('');
-  const [error, setError] = useState('');
+  const [position, setPosition] = useState({ x: 820, y: 96 });
+  const dragRef = useRef(null);
 
-  function append(value) {
-    setError('');
-    setExpression((current) => `${current}${value === 'sqrt' ? 'sqrt(' : value}`);
-  }
+  useEffect(() => {
+    if (!open) return undefined;
 
-  function calculate() {
-    try {
-      setExpression(calculateExpression(expression));
-      setError('');
-    } catch (_error) {
-      setError('Check the expression and try again.');
+    function handleMove(event) {
+      if (!dragRef.current) return;
+      const maxX = Math.max(12, window.innerWidth - 360);
+      const maxY = Math.max(12, window.innerHeight - 220);
+      const nextX = Math.min(maxX, Math.max(12, event.clientX - dragRef.current.offsetX));
+      const nextY = Math.min(maxY, Math.max(12, event.clientY - dragRef.current.offsetY));
+      setPosition({ x: nextX, y: nextY });
     }
-  }
+
+    function handleUp() {
+      dragRef.current = null;
+      document.body.classList.remove('dragging-desmos');
+    }
+
+    window.addEventListener('mousemove', handleMove);
+    window.addEventListener('mouseup', handleUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMove);
+      window.removeEventListener('mouseup', handleUp);
+    };
+  }, [open]);
+
+  if (!open) return null;
 
   return (
-    <Modal
-      open={open}
-      title="Built-in Calculator"
-      className="calculator-modal"
-      onClose={onClose}
-      actions={<Button variant="ghost" onClick={onClose}>Close</Button>}
-    >
-      <div className="calculator-shell">
-        <output className="calculator-display">{expression || '0'}</output>
-        {error ? <p className="form-error">{error}</p> : null}
-        {BUTTONS.map((row) => (
-          <div key={row.join('-')} className="calculator-row">
-            {row.map((item) => (
-              <button
-                key={item}
-                type="button"
-                className={['/', '*', '-', '+'].includes(item) ? 'operator' : ''}
-                onClick={() => {
-                  if (item === 'C') {
-                    setExpression('');
-                    setError('');
-                  } else {
-                    append(item);
-                  }
-                }}
-              >
-                {item === 'sqrt' ? 'sqrt' : item}
-              </button>
-            ))}
-          </div>
-        ))}
-        <button type="button" className="calculator-equals" onClick={calculate}>=</button>
+    <div className="draggable-desmos-window" style={{ left: position.x, top: position.y }} role="dialog" aria-label="Desmos Calculator">
+      <div
+        className="draggable-desmos-head"
+        onMouseDown={(event) => {
+          dragRef.current = {
+            offsetX: event.clientX - position.x,
+            offsetY: event.clientY - position.y
+          };
+          document.body.classList.add('dragging-desmos');
+        }}
+      >
+        <span><Calculator aria-hidden="true" /> Desmos Calculator</span>
+        <Grip aria-hidden="true" />
+        <button type="button" onClick={onClose} aria-label="Close calculator">
+          <X aria-hidden="true" />
+        </button>
       </div>
-    </Modal>
+      <div className="desmos-calculator-shell">
+        <iframe
+          title="Desmos scientific calculator"
+          src="https://www.desmos.com/scientific?embed"
+          loading="lazy"
+          allow="clipboard-write"
+        />
+      </div>
+    </div>
   );
 }

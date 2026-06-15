@@ -3,6 +3,10 @@ import { attemptReviewInclude, examDeepInclude } from "../prisma/selects.js";
 import { ApiError } from "../utils/apiError.js";
 import { buildScoreSummary, evaluateAnswer } from "./scoring.service.js";
 
+function getActiveSections(sections = []) {
+  return sections.filter((section) => section.type !== "listening");
+}
+
 function sanitizeQuestion(question, includeCorrectAnswers = false) {
   return {
     id: question.id,
@@ -44,6 +48,9 @@ function sanitizeExam(
   includeQuestions = true,
   includeCorrectAnswers = false
 ) {
+  const activeSections = getActiveSections(exam.sections || []);
+  const lastAttempt = Array.isArray(exam.attempts) ? exam.attempts[0] : null;
+
   return {
     id: exam.id,
     title: exam.title,
@@ -53,14 +60,18 @@ function sanitizeExam(
     isPublished: exam.isPublished,
     createdAt: exam.createdAt,
     updatedAt: exam.updatedAt,
-    sections: (exam.sections || []).map((section) => ({
+    peopleTookCount: exam._count?.attempts ?? 0,
+    lastScore: lastAttempt?.totalScore ?? null,
+    lastAttemptId: lastAttempt?.id ?? null,
+    lastAttemptStatus: lastAttempt?.status ?? null,
+    sections: activeSections.map((section) => ({
       id: section.id,
       examId: section.examId,
       title: section.title,
       type: section.type,
       duration: section.duration,
       order: section.order,
-      questionsCount: section.questions?.length || 0,
+      questionsCount: section._count?.questions ?? section.questions?.length ?? 0,
       questions: includeQuestions
         ? (section.questions || []).map((question) =>
             sanitizeQuestion(question, includeCorrectAnswers)
@@ -89,18 +100,41 @@ function mapAnswer(answer) {
 }
 
 export async function listExamsForUser(user) {
-  const exams = await prisma.exam.findMany({
-    where: user.role === "ADMIN" ? {} : { isPublished: true },
-    include: {
-      sections: {
-        orderBy: { order: "asc" },
-        include: {
-          questions: {
-            select: { id: true },
-          },
+  const include = {
+    sections: {
+      orderBy: { order: "asc" },
+      include: {
+        _count: {
+          select: { questions: true },
         },
       },
     },
+    _count: {
+      select: { attempts: true },
+    },
+  };
+
+  if (user.role !== "ADMIN") {
+    include.attempts = {
+      where: {
+        userId: user.id,
+        status: {
+          in: ["SUBMITTED", "REVIEWED"],
+        },
+      },
+      orderBy: [{ submittedAt: "desc" }, { startedAt: "desc" }],
+      take: 1,
+      select: {
+        id: true,
+        status: true,
+        totalScore: true,
+      },
+    };
+  }
+
+  const exams = await prisma.exam.findMany({
+    where: user.role === "ADMIN" ? {} : { isPublished: true },
+    include,
     orderBy: { createdAt: "desc" },
   });
 
@@ -124,19 +158,19 @@ export async function getExamForUser(examId, user) {
   return sanitizeExam(exam, true, user.role === "ADMIN");
 }
 
-export async function startAttemptForUser(userId, examId) {
+export async function startAttemptForUser(user, examId) {
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
     include: examDeepInclude,
   });
 
-  if (!exam || !exam.isPublished) {
+  if (!exam || (!exam.isPublished && user.role !== "ADMIN")) {
     throw new ApiError(404, "Published exam not found.");
   }
 
   const existingAttempt = await prisma.attempt.findFirst({
     where: {
-      userId,
+      userId: user.id,
       examId,
       status: "IN_PROGRESS",
     },
@@ -147,9 +181,29 @@ export async function startAttemptForUser(userId, examId) {
     return buildAttemptResponse(existingAttempt, false);
   }
 
+  if (exam.type === "FULL_LENGTH") {
+    const completedAttempt = await prisma.attempt.findFirst({
+      where: {
+        userId: user.id,
+        examId,
+        status: {
+          in: ["SUBMITTED", "REVIEWED"],
+        },
+      },
+      orderBy: [{ submittedAt: "desc" }, { startedAt: "desc" }],
+      select: { id: true },
+    });
+
+    if (completedAttempt) {
+      throw new ApiError(409, "Full length exams can only be completed once.", {
+        attemptId: completedAttempt.id,
+      });
+    }
+  }
+
   const attempt = await prisma.attempt.create({
     data: {
-      userId,
+      userId: user.id,
       examId,
     },
   });
@@ -175,7 +229,7 @@ export async function saveAttemptAnswer(attemptId, userId, payload) {
     throw new ApiError(400, "This attempt has already been submitted.");
   }
 
-  const question = attempt.exam.sections
+  const question = getActiveSections(attempt.exam.sections)
     .flatMap((section) => section.questions)
     .find((entry) => entry.id === payload.questionId);
 
@@ -333,7 +387,7 @@ export async function submitAttempt(attemptId, userId) {
     attempt.answers.map((answer) => [answer.questionId, answer])
   );
 
-  const questionResults = attempt.exam.sections.flatMap((section) =>
+  const questionResults = getActiveSections(attempt.exam.sections).flatMap((section) =>
     section.questions.map((question) => {
       const savedAnswer = answersByQuestionId.get(question.id);
       const isCorrect = evaluateAnswer(question, savedAnswer?.answer);
@@ -423,6 +477,7 @@ export async function listAttemptsForUser(userId) {
     id: attempt.id,
     examId: attempt.examId,
     examTitle: attempt.exam.title,
+    examType: attempt.exam.type,
     status: attempt.status,
     startedAt: attempt.startedAt,
     submittedAt: attempt.submittedAt,
@@ -472,7 +527,7 @@ export async function listAllAttemptsForAdmin() {
 }
 
 export function buildAttemptSummaryForAI(attemptResponse) {
-  const questionAnalysis = attemptResponse.exam.sections.flatMap((section) =>
+  const questionAnalysis = getActiveSections(attemptResponse.exam.sections).flatMap((section) =>
     section.questions.map((question) => {
       const userAnswer = attemptResponse.answers.find(
         (entry) => entry.questionId === question.id
@@ -493,7 +548,7 @@ export function buildAttemptSummaryForAI(attemptResponse) {
   );
 
   const skillBreakdown = buildSkillBreakdown(
-    attemptResponse.exam.sections.flatMap((section) =>
+    getActiveSections(attemptResponse.exam.sections).flatMap((section) =>
       section.questions.map((question) => ({
         question,
         isCorrect: Boolean(

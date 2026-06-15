@@ -7,7 +7,8 @@ export default function SubmitConfirmModal({
   message,
   onCancel,
   onConfirm,
-  confirmLabel = 'Confirm'
+  confirmLabel = 'Confirm',
+  pending = false
 }) {
   return (
     <Modal
@@ -15,10 +16,12 @@ export default function SubmitConfirmModal({
       title={title}
       actions={
         <>
-          <Button variant="ghost" onClick={onCancel}>
+          <Button variant="ghost" onClick={onCancel} disabled={pending}>
             Cancel
           </Button>
-          <Button onClick={onConfirm}>{confirmLabel}</Button>
+          <Button onClick={onConfirm} disabled={pending}>
+            {pending ? 'Working...' : confirmLabel}
+          </Button>
         </>
       }
     >

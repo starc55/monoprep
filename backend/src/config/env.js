@@ -11,6 +11,8 @@ function requireEnv(name, fallback) {
 }
 
 export const env = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  isProduction: process.env.NODE_ENV === 'production',
   port: Number(process.env.PORT || 5000),
   databaseUrl: requireEnv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/sat_ai_platform'),
   jwtSecret: requireEnv('JWT_SECRET', 'super-secret-development-jwt-key'),

@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   BadgeCheck,
   BookOpenCheck,
+  Camera,
   Mail,
   Save,
   ShieldCheck,
@@ -31,6 +32,9 @@ export default function ProfilePage() {
   const user = useAuthStore((state) => state.user);
   const updateProfile = useAuthStore((state) => state.updateProfile);
   const [fullName, setFullName] = useState(user?.fullName || '');
+  const [username, setUsername] = useState(user?.username || '');
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
+  const fileInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [analytics, setAnalytics] = useState(null);
@@ -44,12 +48,27 @@ export default function ProfilePage() {
     setSaving(true);
     setSaveError('');
     try {
-      await updateProfile({ fullName });
-    } catch {
-      setSaveError('Profile could not be saved right now. Please try again after signing in.');
+      await updateProfile({
+        fullName,
+        username: username.trim() || null,
+        avatarUrl: avatarUrl.trim() || null
+      });
+    } catch (error) {
+      setSaveError(error.response?.data?.message || 'Profile could not be saved right now. Please try again after signing in.');
     } finally {
       setSaving(false);
     }
+  }
+
+  function handleAvatarFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      setAvatarUrl(String(reader.result || ''));
+    };
+    reader.readAsDataURL(file);
   }
 
   const attempts = analytics?.overview?.attemptsTaken || 0;
@@ -58,11 +77,15 @@ export default function ProfilePage() {
   return (
     <AppLayout title="Profile" subtitle="Manage your account information and track your prep momentum.">
       <section className="profile-hero">
-        <div className="profile-avatar">{getInitials(user?.fullName)}</div>
+        <button type="button" className="profile-avatar editable-avatar" onClick={() => fileInputRef.current?.click()}>
+          {avatarUrl ? <img src={avatarUrl} alt="" /> : getInitials(user?.fullName)}
+          <span><Camera aria-hidden="true" /> Change image</span>
+        </button>
+        <input ref={fileInputRef} className="sr-only" type="file" accept="image/*" onChange={handleAvatarFile} />
         <div className="profile-identity">
           <span className="profile-chip"><BadgeCheck aria-hidden="true" /> SAT Student</span>
           <h2>{user?.fullName || 'MonoPrep Student'}</h2>
-          <p><Mail aria-hidden="true" /> {user?.email || 'Student account'}</p>
+          <p><Mail aria-hidden="true" /> {user?.username ? `@${user.username}` : user?.email || 'Student account'}</p>
         </div>
         <div className="profile-highlights">
           <div><strong>{attempts}</strong><span>Tests completed</span></div>
@@ -78,6 +101,19 @@ export default function ProfilePage() {
               <span><UserRound aria-hidden="true" /> Full name</span>
               <input value={fullName} onChange={(event) => setFullName(event.target.value)} />
             </label>
+            <label className="form-field">
+              <span><Trophy aria-hidden="true" /> Username</span>
+              <input
+                value={username}
+                onChange={(event) => setUsername(event.target.value.replace(/[^a-zA-Z0-9_]/g, ''))}
+                placeholder="monoprep_player"
+                maxLength={24}
+              />
+            </label>
+            <div className="profile-upload-hint">
+              <Camera aria-hidden="true" />
+              <span>Click your avatar above to upload a profile image.</span>
+            </div>
             <label className="form-field">
               <span><Mail aria-hidden="true" /> Email address</span>
               <input value={user?.email || ''} disabled />

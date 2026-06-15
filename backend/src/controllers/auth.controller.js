@@ -2,6 +2,17 @@ import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma.js';
 import { signToken } from '../utils/jwt.js';
 
+function serializeUser(user) {
+  return {
+    id: user.id,
+    fullName: user.fullName,
+    email: user.email,
+    username: user.username,
+    avatarUrl: user.avatarUrl,
+    role: user.role
+  };
+}
+
 export async function register(req, res) {
   const { fullName, email, password } = req.body;
 
@@ -26,12 +37,7 @@ export async function register(req, res) {
 
   res.status(201).json({
     token,
-    user: {
-      id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role
-    }
+    user: serializeUser(user)
   });
 }
 
@@ -55,12 +61,7 @@ export async function login(req, res) {
 
   res.json({
     token,
-    user: {
-      id: user.id,
-      fullName: user.fullName,
-      email: user.email,
-      role: user.role
-    }
+    user: serializeUser(user)
   });
 }
 
@@ -69,15 +70,41 @@ export async function me(req, res) {
 }
 
 export async function updateMe(req, res) {
+  const username = req.body.username?.trim() || null;
+  if (username) {
+    const existing = await prisma.user.findFirst({
+      where: {
+        username,
+        NOT: { id: req.user.id }
+      },
+      select: { id: true }
+    });
+
+    if (existing) {
+      return res.status(409).json({ message: 'Username is already taken.' });
+    }
+  }
+
+  const data = {};
+  if (req.body.fullName !== undefined) {
+    data.fullName = req.body.fullName.trim();
+  }
+  if (req.body.username !== undefined) {
+    data.username = username;
+  }
+  if (req.body.avatarUrl !== undefined) {
+    data.avatarUrl = req.body.avatarUrl || null;
+  }
+
   const user = await prisma.user.update({
     where: { id: req.user.id },
-    data: {
-      fullName: req.body.fullName
-    },
+    data,
     select: {
       id: true,
       fullName: true,
       email: true,
+      username: true,
+      avatarUrl: true,
       role: true
     }
   });

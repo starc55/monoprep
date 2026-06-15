@@ -75,9 +75,6 @@ export default function AIFeedbackPage() {
         <Card title="Math Estimate">
           <strong className="big-score">{estimatedScore.math || 0}</strong>
         </Card>
-        <Card title="Listening Estimate">
-          <strong className="big-score">{estimatedScore.listening || 0}</strong>
-        </Card>
       </div>
 
       <Card title="Skill Breakdown">

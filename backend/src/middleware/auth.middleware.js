@@ -17,6 +17,8 @@ export async function requireAuth(req, res, next) {
         id: true,
         email: true,
         fullName: true,
+        username: true,
+        avatarUrl: true,
         role: true
       }
     });

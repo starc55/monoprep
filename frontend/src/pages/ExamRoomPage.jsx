@@ -9,7 +9,9 @@ import QuestionPalette from '../components/exam/QuestionPalette.jsx';
 import PassagePanel from '../components/exam/PassagePanel.jsx';
 import SectionIntro from '../components/exam/SectionIntro.jsx';
 import SubmitConfirmModal from '../components/exam/SubmitConfirmModal.jsx';
+import FormulaReferenceDialog from '../components/exam/FormulaReferenceDialog.jsx';
 import QuestionRenderer from '../components/question/QuestionRenderer.jsx';
+import EmptyState from '../components/ui/EmptyState.jsx';
 import { getAttempt, saveAnswer, submitAttempt } from '../services/attemptService.js';
 import { generateFeedback } from '../services/aiService.js';
 import { useExamStore } from '../store/examStore.js';
@@ -28,6 +30,8 @@ export default function ExamRoomPage() {
   const user = useAuthStore((state) => state.user);
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -37,6 +41,7 @@ export default function ExamRoomPage() {
   const [activeDialog, setActiveDialog] = useState(null);
   const [splitPercent, setSplitPercent] = useState(52);
   const [transitionSectionIndex, setTransitionSectionIndex] = useState(null);
+  const [completedSectionForTransition, setCompletedSectionForTransition] = useState(null);
   const [banner, setBanner] = useState('');
   const advancingRef = useRef(false);
   const bodyRef = useRef(null);
@@ -67,7 +72,10 @@ export default function ExamRoomPage() {
       setLoading(false);
     }
 
-    loadAttempt().catch(() => setLoading(false));
+    loadAttempt().catch((error) => {
+      setLoadError(error.response?.data?.message || 'Exam room could not be loaded. Please return to Practice Exams and try again.');
+      setLoading(false);
+    });
   }, [attemptId, initializeSession, navigate]);
 
   const sections = attempt?.exam.sections || [];
@@ -121,6 +129,7 @@ export default function ExamRoomPage() {
 
     const nextIndex = (session?.currentSectionIndex || 0) + 1;
     if (nextIndex >= sections.length) {
+      setSubmitting(true);
       const submitted = await submitAttempt(attemptId);
       setAttempt(submitted);
       clearSession(attemptId);
@@ -326,12 +335,13 @@ export default function ExamRoomPage() {
     setModalOpen(true);
   }
 
-  function beginSectionTransition(index) {
+  function beginSectionTransition(index, completedSection) {
+    setCompletedSectionForTransition(completedSection);
     setTransitionSectionIndex(index);
   }
 
   async function advanceSection() {
-    if (!attempt || !currentSection) {
+    if (!attempt || !currentSection || submitting) {
       return;
     }
 
@@ -351,19 +361,39 @@ export default function ExamRoomPage() {
     setModalOpen(false);
 
     if (nextIndex >= sections.length) {
-      const submitted = await submitAttempt(attemptId);
-      setAttempt(submitted);
-      clearSession(attemptId);
-      generateFeedback(attemptId).catch(() => null);
-      navigate(`/attempts/${attemptId}/review`, { replace: true });
+      setSubmitting(true);
+      try {
+        const submitted = await submitAttempt(attemptId);
+        setAttempt(submitted);
+        clearSession(attemptId);
+        generateFeedback(attemptId).catch(() => null);
+        navigate(`/attempts/${attemptId}/review`, { replace: true });
+      } catch (_error) {
+        setBanner('Submit failed. Please check your connection and try again.');
+      } finally {
+        setSubmitting(false);
+      }
       return;
     }
 
-    beginSectionTransition(nextIndex);
+    beginSectionTransition(nextIndex, currentSection);
   }
 
-  if (loading || !attempt || !session || !currentSection || !currentQuestion) {
+  if (loading) {
     return <Loader label="Launching exam room..." />;
+  }
+
+  if (loadError || !attempt || !session || !currentSection || !currentQuestion) {
+    return (
+      <ExamLayout>
+        <EmptyState
+          title="Exam room unavailable"
+          message={loadError || 'This attempt could not be opened.'}
+          actionLabel="Back to practice"
+          actionTo="/practice"
+        />
+      </ExamLayout>
+    );
   }
 
   if (transitionSectionIndex !== null) {
@@ -371,6 +401,9 @@ export default function ExamRoomPage() {
       <ExamLayout>
         <SectionIntro
           section={sections[transitionSectionIndex]}
+          completedSection={completedSectionForTransition}
+          answers={answerMap}
+          reviewFlags={reviewFlags}
           onContinue={() => {
             updateSession(attemptId, {
               currentSectionIndex: transitionSectionIndex,
@@ -378,6 +411,7 @@ export default function ExamRoomPage() {
               currentSectionStartedAt: Date.now()
             });
             setTransitionSectionIndex(null);
+            setCompletedSectionForTransition(null);
           }}
         />
       </ExamLayout>
@@ -421,7 +455,7 @@ export default function ExamRoomPage() {
         className={`bluebook-body section-${currentSection.type} ${showPassagePanel ? '' : 'single-panel'}`.trim()}
         style={{ '--passage-width': `${splitPercent}%` }}
       >
-        {showPassagePanel ? <PassagePanel question={currentQuestion} /> : null}
+        {showPassagePanel ? <PassagePanel question={currentQuestion} attemptId={attemptId} /> : null}
         {showPassagePanel ? (
           <div
             className="panel-resizer"
@@ -503,7 +537,8 @@ export default function ExamRoomPage() {
             Previous
           </button>
           <button type="button" className="next-button" onClick={handleNext}>
-            {session.currentQuestionIndex === currentSection.questions.length - 1
+            {submitting ? 'Submitting...'
+              : session.currentQuestionIndex === currentSection.questions.length - 1
               ? (session.currentSectionIndex === sections.length - 1 ? 'Submit' : 'Next Section')
               : 'Next'}
           </button>
@@ -521,9 +556,15 @@ export default function ExamRoomPage() {
         onCancel={() => setModalOpen(false)}
         onConfirm={advanceSection}
         confirmLabel={session.currentSectionIndex === sections.length - 1 ? 'Submit exam' : 'Continue'}
+        pending={submitting}
+      />
+      <FormulaReferenceDialog
+        open={activeDialog === 'formula'}
+        text={formulaReferenceText}
+        onClose={() => setActiveDialog(null)}
       />
       <Modal
-        open={Boolean(dialog)}
+        open={Boolean(dialog) && activeDialog !== 'formula'}
         title={dialog?.title}
         actions={
           <Button onClick={() => {
@@ -556,6 +597,11 @@ export default function ExamRoomPage() {
         onConfirm={() => navigate('/attempts')}
         confirmLabel="Exit exam"
       />
+      {submitting ? (
+        <div className="submit-overlay" role="status" aria-live="polite">
+          <Loader label="Submitting and building your score report..." />
+        </div>
+      ) : null}
     </ExamLayout>
   );
 }

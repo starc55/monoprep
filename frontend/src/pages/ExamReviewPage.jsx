@@ -4,9 +4,11 @@ import {
   BarChart3,
   CheckCircle2,
   Clock3,
+  Download,
   Eye,
   FileQuestion,
   Sparkles,
+  Star,
   Target,
   XCircle
 } from 'lucide-react';
@@ -48,6 +50,16 @@ function statusLabel(status) {
   return status.charAt(0) + status.slice(1).toLowerCase();
 }
 
+function scoreToSatTotal(value) {
+  if (!value) return 400;
+  return value > 100 ? value : Math.round(400 + (value / 100) * 1200);
+}
+
+function scoreToSatSection(value) {
+  if (!value) return 200;
+  return value > 100 ? value : Math.round(200 + (value / 100) * 600);
+}
+
 export default function ExamReviewPage() {
   const { attemptId } = useParams();
   const [loading, setLoading] = useState(true);
@@ -57,6 +69,9 @@ export default function ExamReviewPage() {
   const [viewCount, setViewCount] = useState('10');
   const [showCorrectAnswers, setShowCorrectAnswers] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const [surveyOpen, setSurveyOpen] = useState(false);
+  const [rating, setRating] = useState(0);
+  const [surveyStep, setSurveyStep] = useState(1);
 
   useEffect(() => {
     async function loadReview() {
@@ -75,6 +90,14 @@ export default function ExamReviewPage() {
 
     loadReview().catch(() => setLoading(false));
   }, [attemptId]);
+
+  useEffect(() => {
+    if (!attempt || attempt.status === 'IN_PROGRESS') return;
+    const key = `monoprep-exam-survey:${attempt.id}`;
+    if (!localStorage.getItem(key)) {
+      setSurveyOpen(true);
+    }
+  }, [attempt]);
 
   const rows = useMemo(() => {
     if (!attempt) return [];
@@ -110,7 +133,7 @@ export default function ExamReviewPage() {
     return viewCount === 'ALL' ? filtered : filtered.slice(0, Number(viewCount));
   }, [filter, rows, viewCount]);
 
-  if (loading || !attempt) {
+  if (loading) {
     return (
       <AppLayout title="Exam Review" subtitle="See your results, answer details and AI-supported next steps.">
         <Loader label="Loading review..." />
@@ -118,33 +141,73 @@ export default function ExamReviewPage() {
     );
   }
 
+  if (!attempt) {
+    return (
+      <AppLayout title="Exam Review" subtitle="The selected attempt could not be loaded.">
+        <EmptyState
+          icon={FileQuestion}
+          title="Review unavailable"
+          message="This attempt may have been deleted or is no longer available."
+          actionLabel="Back to practice"
+          actionTo="/practice"
+        />
+      </AppLayout>
+    );
+  }
+
   const aiQuestionFeedback = feedback?.questionAnalysis?.find((item) => item.questionId === selectedRow?.id);
+  const totalSatScore = scoreToSatTotal(attempt.totalScore);
+  const readingSatScore = scoreToSatSection(attempt.readingWritingScore);
+  const mathSatScore = scoreToSatSection(attempt.mathScore);
+
+  function handleDownloadReport() {
+    window.print();
+  }
+
+  function finishSurvey() {
+    localStorage.setItem(`monoprep-exam-survey:${attempt.id}`, JSON.stringify({ rating, submittedAt: new Date().toISOString() }));
+    setSurveyOpen(false);
+  }
 
   return (
     <AppLayout
-      title="Exam Review"
+      title="Your SAT Results"
       subtitle={`${attempt.exam.title} - performance report and question-level review.`}
       actions={
-        <Link className="button button-primary" to={`/attempts/${attempt.id}/ai-feedback`}>
-          <Sparkles aria-hidden="true" /> Open AI Feedback
-        </Link>
+        <>
+          <Button variant="ghost" onClick={handleDownloadReport}>
+            <Download aria-hidden="true" /> Download Report
+          </Button>
+          <Link className="button button-primary" to={`/attempts/${attempt.id}/ai-feedback`}>
+            <Sparkles aria-hidden="true" /> Open AI Feedback
+          </Link>
+        </>
       }
     >
+      <nav className="results-tabs" aria-label="Result sections">
+        {['Scores', 'Performance', 'Leaderboard', 'Domains', 'Question Review'].map((item) => (
+          <a key={item} href={item === 'Question Review' ? '#question-review' : '#score-summary'}>
+            {item}
+          </a>
+        ))}
+      </nav>
+
       <section className="review-scoreboard">
-        <Card className="review-final-score">
+        <Card className="review-section-score score-ring-card">
+          <span>Reading & Writing</span>
+          <strong>{readingSatScore}<small>/800</small></strong>
+          <ProgressBar value={attempt.readingWritingScore || 0} tone="violet" />
+          <p>{overview.correct} correct, {overview.incorrect} wrong across the exam.</p>
+        </Card>
+        <Card id="score-summary" className="review-final-score total-score-card">
           <span>Final score</span>
-          <strong>{attempt.totalScore || 0}%</strong>
+          <strong>{totalSatScore}<small>/1600</small></strong>
           <ProgressBar value={attempt.totalScore || 0} />
           <p><Clock3 aria-hidden="true" /> Time spent: {formatSeconds(attempt.timeSpent || 0)}</p>
         </Card>
-        <Card className="review-section-score">
-          <span>Reading and Writing</span>
-          <strong>{attempt.readingWritingScore || 0}%</strong>
-          <ProgressBar value={attempt.readingWritingScore || 0} tone="violet" />
-        </Card>
-        <Card className="review-section-score">
+        <Card className="review-section-score score-ring-card">
           <span>Math</span>
-          <strong>{attempt.mathScore || 0}%</strong>
+          <strong>{mathSatScore}<small>/800</small></strong>
           <ProgressBar value={attempt.mathScore || 0} tone="cyan" />
         </Card>
         <Card className="ai-summary-card">
@@ -161,7 +224,7 @@ export default function ExamReviewPage() {
         <StatCard icon={Target} tone="violet" label="Accuracy" value={`${overview.accuracy}%`} />
       </div>
 
-      <Card className="questions-overview">
+      <Card id="question-review" className="questions-overview">
         <div className="questions-head">
           <div>
             <h2>Questions Overview</h2>
@@ -248,6 +311,56 @@ export default function ExamReviewPage() {
         )}
       </Card>
 
+      <section className="sat-report-sheet review-print-sheet" aria-label="Printable SAT score report">
+        <header>
+          <div className="sat-report-brand">
+            <span>D</span>
+            <b>SAT</b>
+          </div>
+          <div>
+            <strong>{attempt.exam.title}</strong>
+            <span>{new Date(attempt.submittedAt || attempt.startedAt).toLocaleDateString()}</span>
+          </div>
+        </header>
+        <h2>Your Scores</h2>
+        <div className="sat-report-box">
+          <div className="sat-report-scores">
+            <h3>SAT Scores</h3>
+            <span>Total Score</span>
+            <strong>{totalSatScore}</strong>
+            <small>400-1600</small>
+            <span>Reading and Writing</span>
+            <b>{readingSatScore}</b>
+            <span>Math</span>
+            <b>{mathSatScore}</b>
+          </div>
+          <div className="sat-report-skills">
+            <h3>Knowledge and Skills</h3>
+            <p>Question-level summary from this attempt.</p>
+            <div>
+              <article>
+                <strong>Correct Answers</strong>
+                <span>{overview.correct} of {overview.total}</span>
+                <div className="report-mini-segments">
+                  {Array.from({ length: 7 }).map((_, index) => (
+                    <i key={`correct-${index}`} className={index < Math.ceil(overview.accuracy / 15) ? 'filled' : ''} />
+                  ))}
+                </div>
+              </article>
+              <article>
+                <strong>Incorrect and Unanswered</strong>
+                <span>{overview.incorrect} incorrect, {overview.unanswered} unanswered</span>
+                <div className="report-mini-segments">
+                  {Array.from({ length: 7 }).map((_, index) => (
+                    <i key={`missed-${index}`} className={index < Math.ceil(((overview.incorrect + overview.unanswered) / Math.max(1, overview.total)) * 7) ? 'filled' : ''} />
+                  ))}
+                </div>
+              </article>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <Modal
         open={Boolean(selectedRow)}
         title={selectedRow ? `Question #${selectedRow.number} Review` : 'Question Review'}
@@ -293,6 +406,40 @@ export default function ExamReviewPage() {
             ) : null}
           </div>
         ) : null}
+      </Modal>
+      <Modal
+        open={surveyOpen}
+        title={surveyStep === 1 ? 'How challenging was this exam overall?' : 'Thanks for the feedback'}
+        className="exam-survey-modal"
+        actions={surveyStep === 1 ? (
+          <Button onClick={() => setSurveyStep(2)} disabled={!rating}>Next</Button>
+        ) : (
+          <Button onClick={finishSurvey}>View results</Button>
+        )}
+      >
+        {surveyStep === 1 ? (
+          <div className="survey-rating">
+            <p>Rate from 1 (Very Easy) to 5 (Very Difficult)</p>
+            <div className="survey-notice">This survey can only be submitted once per test. Your feedback helps us improve.</div>
+            <div className="rating-row">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  className={rating === value ? 'active' : ''}
+                  onClick={() => setRating(value)}
+                >
+                  {value}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="survey-rating">
+            <Star aria-hidden="true" />
+            <p>Your rating was saved on this device.</p>
+          </div>
+        )}
       </Modal>
     </AppLayout>
   );

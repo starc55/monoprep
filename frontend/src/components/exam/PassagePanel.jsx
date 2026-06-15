@@ -1,7 +1,126 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
-export default function PassagePanel({ question }) {
+const colors = [
+  { id: 'yellow', label: 'Yellow', value: '#fff3a3' },
+  { id: 'green', label: 'Green', value: '#c9f7d4' },
+  { id: 'blue', label: 'Blue', value: '#cfe3ff' },
+  { id: 'pink', label: 'Pink', value: '#ffd6e7' }
+];
+
+function getStorageKey(attemptId, passageId) {
+  return `monoprep-highlights:${attemptId || 'preview'}:${passageId || 'passage'}`;
+}
+
+function readHighlights(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) || '[]');
+  } catch (_error) {
+    return [];
+  }
+}
+
+function writeHighlights(key, highlights) {
+  localStorage.setItem(key, JSON.stringify(highlights));
+}
+
+function tokenize(content) {
+  let wordIndex = 0;
+  return content.split(/(\s+)/).map((token, index) => {
+    const isSpace = /^\s+$/.test(token);
+    const currentIndex = isSpace ? null : wordIndex++;
+    return { token, key: `${index}-${token}`, wordIndex: currentIndex, isSpace };
+  });
+}
+
+function findHighlight(highlights, wordIndex) {
+  return highlights.find((item) => wordIndex >= item.start && wordIndex <= item.end);
+}
+
+export default function PassagePanel({ question, attemptId }) {
   const [collapsed, setCollapsed] = useState(false);
+  const panelRef = useRef(null);
+  const storageKey = getStorageKey(attemptId, question?.passage?.id);
+  const [highlights, setHighlights] = useState(() => readHighlights(storageKey));
+  const [selectionRange, setSelectionRange] = useState(null);
+  const tokens = useMemo(() => tokenize(question?.passage?.content || ''), [question?.passage?.content]);
+
+  useEffect(() => {
+    setHighlights(readHighlights(storageKey));
+    setSelectionRange(null);
+  }, [storageKey]);
+
+  function updateHighlights(nextHighlights) {
+    setHighlights(nextHighlights);
+    writeHighlights(storageKey, nextHighlights);
+  }
+
+  function handleMouseUp() {
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !panelRef.current) {
+      setSelectionRange(null);
+      return;
+    }
+
+    const anchor = selection.anchorNode?.parentElement?.closest?.('[data-word-index]');
+    const focus = selection.focusNode?.parentElement?.closest?.('[data-word-index]');
+    if (!anchor || !focus || !panelRef.current.contains(anchor) || !panelRef.current.contains(focus)) {
+      setSelectionRange(null);
+      return;
+    }
+
+    const start = Number(anchor.dataset.wordIndex);
+    const end = Number(focus.dataset.wordIndex);
+    setSelectionRange({
+      start: Math.min(start, end),
+      end: Math.max(start, end),
+      text: selection.toString().trim()
+    });
+  }
+
+  function applyHighlight(color) {
+    if (!selectionRange) return;
+    const next = highlights
+      .filter((item) => item.end < selectionRange.start || item.start > selectionRange.end)
+      .concat({ ...selectionRange, color })
+      .sort((a, b) => a.start - b.start);
+    updateHighlights(next);
+    window.getSelection()?.removeAllRanges();
+    setSelectionRange(null);
+  }
+
+  function clearHighlight() {
+    if (!selectionRange) return;
+    updateHighlights(highlights.filter((item) => item.end < selectionRange.start || item.start > selectionRange.end));
+    window.getSelection()?.removeAllRanges();
+    setSelectionRange(null);
+  }
+
+  function saveSelectionToVocabulary() {
+    const word = selectionRange?.text?.replace(/\s+/g, ' ').trim();
+    if (!word) return;
+
+    let customWords = [];
+    try {
+      customWords = JSON.parse(localStorage.getItem('monoprep-vocab-custom') || '[]');
+    } catch (_error) {
+      customWords = [];
+    }
+
+    const exists = customWords.some((item) => item.word.toLowerCase() === word.toLowerCase());
+    if (!exists) {
+      customWords.unshift({
+        id: `custom-${word.toLowerCase().replace(/[^a-z0-9]+/g, '-')}-${Date.now()}`,
+        word,
+        meaning: 'Saved from Reading practice. Add your own definition in Vocabulary.',
+        example: question?.passage?.title ? `From: ${question.passage.title}` : 'Saved from a MonoPrep passage.',
+        source: 'My words'
+      });
+      localStorage.setItem('monoprep-vocab-custom', JSON.stringify(customWords));
+    }
+
+    window.getSelection()?.removeAllRanges();
+    setSelectionRange(null);
+  }
 
   if (!question?.passage) {
     return (
@@ -23,9 +142,40 @@ export default function PassagePanel({ question }) {
           {collapsed ? 'Show' : 'Hide'}
         </button>
       </div>
-      <div className="passage-content">
-        <p>{question.passage.content}</p>
+      <div className="passage-content highlightable-passage" ref={panelRef} onMouseUp={handleMouseUp}>
+        <p>
+          {tokens.map(({ token, key, wordIndex, isSpace }) => {
+            if (isSpace) return token;
+            const highlight = findHighlight(highlights, wordIndex);
+            return (
+              <span
+                key={key}
+                data-word-index={wordIndex}
+                className={highlight ? 'highlighted-token' : ''}
+                style={highlight ? { backgroundColor: highlight.color } : undefined}
+              >
+                {token}
+              </span>
+            );
+          })}
+        </p>
       </div>
+      {selectionRange ? (
+        <div className="highlight-toolbar">
+          {colors.map((color) => (
+            <button
+              key={color.id}
+              type="button"
+              title={color.label}
+              aria-label={`Highlight ${color.label}`}
+              style={{ backgroundColor: color.value }}
+              onClick={() => applyHighlight(color.value)}
+            />
+          ))}
+          <button type="button" className="highlight-clear" onClick={clearHighlight}>Clear</button>
+          <button type="button" className="highlight-vocab" onClick={saveSelectionToVocabulary}>+ Vocabulary</button>
+        </div>
+      ) : null}
     </div>
   );
 }

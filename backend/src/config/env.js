@@ -2,23 +2,38 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-function requireEnv(name, fallback) {
-  const value = process.env[name] || fallback;
+const nodeEnv = process.env.NODE_ENV || 'development';
+const isProduction = nodeEnv === 'production';
+
+function requireEnv(name, developmentFallback) {
+  const configuredValue = process.env[name]?.trim();
+  const value = configuredValue || (!isProduction ? developmentFallback : undefined);
   if (!value) {
     throw new Error(`Missing environment variable: ${name}`);
   }
   return value;
 }
 
+function positiveInteger(name, fallback) {
+  const value = Number(process.env[name] || fallback);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} must be a positive integer.`);
+  }
+  return value;
+}
+
 export const env = {
-  nodeEnv: process.env.NODE_ENV || 'development',
-  isProduction: process.env.NODE_ENV === 'production',
+  nodeEnv,
+  isProduction,
   port: Number(process.env.PORT || 5000),
-  databaseUrl: requireEnv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/sat_ai_platform'),
-  jwtSecret: requireEnv('JWT_SECRET', 'super-secret-development-jwt-key'),
+  databaseUrl: requireEnv('DATABASE_URL'),
+  supabaseUrl: requireEnv('SUPABASE_URL'),
+  supabasePublishableKey: requireEnv('SUPABASE_PUBLISHABLE_KEY'),
+  supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '',
+  examSubmissionGraceMinutes: positiveInteger('EXAM_SUBMISSION_GRACE_MINUTES', 15),
   openAiApiKey: process.env.OPENAI_API_KEY || '',
   openAiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl: requireEnv('CLIENT_URL', 'http://localhost:5173'),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || ''
 };

@@ -3,30 +3,50 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "dev": "nodemon src/server.js",
-    "dev:db": "nodemon src/server.js",
     "start": "node src/server.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:validate": "prisma validate",
+    "bootstrap:admin": "node src/scripts/bootstrapAdmin.js",
+    "backup:neon": "node src/scripts/exportNeonData.js",
+    "prepare:supabase-import": "node src/scripts/prepareSupabaseImport.js",
+    "prepare:auth-migration": "node src/scripts/prepareAuthMigrationPayload.js",
+    "migrate:legacy-auth": "node src/scripts/migrateLegacyAuthUsers.js",
+    "verify:supabase": "node src/scripts/verifySupabaseMigration.js",
+    "verify:supabase:strict": "node src/scripts/verifySupabaseMigration.js --strict",
+    "security:frontend": "node src/scripts/checkFrontendSecrets.js",
+    "test:auth": "node --test src/middleware/auth.middleware.test.js",
     "seed": "node src/seed/seed.js"
   },
   "dependencies": {
     "@prisma/client": "^6.8.2",
-    "bcrypt": "^6.0.0",
+    "@supabase/supabase-js": "2.110.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
+    "express-rate-limit": "^8.6.0",
+    "file-type": "^22.0.1",
     "helmet": "^8.0.0",
-    "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.0",
-    "multer": "^2.1.1",
+    "morgan": "^1.11.0",
+    "multer": "^2.2.0",
     "openai": "^4.104.0",
     "zod": "^3.23.8"
   },
   "devDependencies": {
     "nodemon": "^3.1.4",
     "prisma": "^6.8.2"
+  },
+  "overrides": {
+    "body-parser": "1.20.6",
+    "brace-expansion": "5.0.9",
+    "deepmerge-ts": "8.0.2",
+    "form-data": "4.0.6",
+    "ip-address": "10.5.0",
+    "qs": "6.15.3"
   }
 }

@@ -1,126 +1,72 @@
 # MonoPrep
 
-SAT-style practice platform built with React, Vite, CSS, Express, Prisma, Neon PostgreSQL, custom JWT auth, bcrypt password hashing, OpenAI-powered feedback, and Framer Motion.
+MonoPrep is a SAT practice platform built with React, Vite, Express, Prisma, Supabase,
+OpenAI feedback, and Framer Motion.
 
 ## Stack
 
-- Frontend: React + Vite + CSS
-- Backend: Node.js + Express
-- Database: Neon PostgreSQL
-- ORM: Prisma
-- Auth: custom JWT access token
-- Password hashing: bcrypt
-- AI feedback: backend API calling OpenAI
-- Motion: Framer Motion
+- Frontend: React 18 + Vite
+- Backend: Node.js 22 + Express
+- Database: Supabase PostgreSQL through Prisma
+- Auth: Supabase Auth (email/password, recovery, Google OAuth, persistent sessions)
+- Storage: Supabase Storage
+- Authorization: Express business rules plus PostgreSQL RLS
+- AI feedback: OpenAI from the backend only
 
-No external backend-as-a-service runtime is used.
+Premium subscriptions and course enrollments are independent. Premium unlocks platform
+features; an active course enrollment unlocks `My Teacher`.
 
-## Environment
+## Start Locally
 
-Backend `backend/.env`:
+Create environment files from the committed examples and fill in the Supabase values:
 
-```env
-DATABASE_URL="postgresql://USER:PASSWORD@HOST.neon.tech/DBNAME?sslmode=require"
-JWT_SECRET="replace-with-a-long-random-secret"
-OPENAI_API_KEY="your-openai-api-key"
-OPENAI_MODEL="gpt-4o-mini"
-TELEGRAM_BOT_TOKEN="your-telegram-bot-token"
-TELEGRAM_CHAT_ID="your-telegram-chat-id"
-PORT=5000
-CLIENT_URL=http://localhost:5173
+```powershell
+Copy-Item backend/.env.example backend/.env
+Copy-Item frontend/.env.example frontend/.env
 ```
 
-Frontend `frontend/.env`:
+Backend:
 
-```env
-VITE_API_URL=http://localhost:5000/api
-```
-
-## Setup
-
-```bash
-cd backend
+```powershell
+Set-Location backend
 npm install
 npm run prisma:generate
-npm run prisma:migrate
-npm run seed
 npm run dev
 ```
 
-```bash
-cd frontend
+Frontend:
+
+```powershell
+Set-Location frontend
 npm install
 npm run dev
 ```
 
-## Vercel Frontend Deployment
+Open `http://localhost:5173`. The API health check is
+`http://localhost:5000/api/health`.
 
-Deploy the Vite application with `frontend` configured as the Vercel project root. Its
-`vercel.json` keeps React Router deep links such as `/admin/exams` and `/exam/:id`
-working after a direct visit or browser refresh.
+Set `VITE_DESMOS_API_KEY` in `frontend/.env` for the official embedded Desmos
+Graphing Calculator in production. Local development uses Desmos's documented demo key.
 
-Set `VITE_API_URL` in the Vercel frontend environment to the deployed backend API URL,
-including the `/api` suffix. The Express backend and uploaded exam media must run on a
-persistent backend or object storage service rather than the static frontend deployment.
+## Authentication
 
-Default seeded users:
+The browser authenticates directly with Supabase and sends the access token to Express
+as `Authorization: Bearer <token>`. Express verifies it with Supabase and loads the
+linked MonoPrep profile before applying role, premium, enrollment, and ownership rules.
 
-- Admin: `admin@satai.com` / `Admin123!`
-- Student: `student@satai.com` / `Student123!`
+Application auth endpoints:
 
-## API
-
-Auth:
-
-- `POST /api/auth/register`
-- `POST /api/auth/login`
 - `GET /api/auth/me`
 - `PUT /api/auth/me`
 
-Exams:
+Password signup/login, Google OAuth, verification, logout, and recovery use the
+Supabase client.
 
-- `GET /api/exams`
-- `GET /api/exams/:id`
-- `POST /api/exams`
-- `PUT /api/exams/:id`
-- `DELETE /api/exams/:id`
+## Migration
 
-Attempts:
+The full Neon-to-Supabase runbook, environment variables, RLS policies, Storage paths,
+Google OAuth setup, existing-user reset strategy, deployment steps, and rollback plan
+are in [docs/SUPABASE_MIGRATION.md](docs/SUPABASE_MIGRATION.md).
 
-- `POST /api/attempts/start`
-- `POST /api/attempts/:id/answer`
-- `POST /api/attempts/:id/submit`
-- `GET /api/attempts/:id`
-- `GET /api/attempts/me`
-
-AI:
-
-- `POST /api/ai/feedback/:attemptId`
-- `GET /api/ai/feedback/:attemptId`
-
-Support:
-
-- `POST /api/support`
-
-Admin:
-
-- `GET /api/admin/stats`
-- `GET /api/admin/users`
-- `GET /api/admin/attempts`
-
-Content management:
-
-- `/api/sections`
-- `/api/passages`
-- `/api/questions`
-- `/api/options`
-
-## Product Behavior
-
-- Student login redirects to `/dashboard`.
-- Admin login redirects to `/admin`.
-- Students cannot access `/admin`.
-- Admin has a separate layout and sidebar.
-- Student sidebar never shows admin links.
-- Exam mode includes timer, mark for review, answer autosave, question palette, submit, scoring, review, and AI feedback.
-- Bluebook-like exam experience is preserved with original MonoPrep branding.
+Do not run a destructive Prisma reset or delete Neon until the migration validation
+checklist is complete.

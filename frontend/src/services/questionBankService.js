@@ -10,12 +10,12 @@ export async function createQuestionBankItem(payload) {
   return data.item;
 }
 
-export async function updateQuestionBankItem(id, payload) {
-  const { data } = await api.put(`/question-bank/${id}`, payload);
-  return data.item;
+export async function getQuestionHubProgress() {
+  const { data } = await api.get('/question-bank/progress');
+  return data.progress;
 }
 
-export async function deleteQuestionBankItem(id) {
-  const { data } = await api.delete(`/question-bank/${id}`);
-  return data;
+export async function saveQuestionHubProgress(progress) {
+  const { data } = await api.put('/question-bank/progress', progress);
+  return data.progress;
 }

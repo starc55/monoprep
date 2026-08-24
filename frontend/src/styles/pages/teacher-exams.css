@@ -1,0 +1,332 @@
+/* Teacher exam studio: isolate the shared admin builder from global form overrides. */
+.teacher-shell .app-main > div:has(.teacher-exam-workspace) {
+  width: min(100%, 1640px);
+  margin-inline: auto;
+}
+
+.teacher-exam-workspace {
+  display: grid;
+  gap: 1.25rem;
+  width: 100%;
+  min-width: 0;
+  color: #0a1835;
+}
+
+.teacher-exam-workspace *,
+.teacher-exam-workspace *::before,
+.teacher-exam-workspace *::after {
+  min-width: 0;
+}
+
+.teacher-exam-loading {
+  min-height: calc(100dvh - 150px);
+}
+
+.teacher-exam-workspace .sat-builder-shell {
+  gap: 1.25rem;
+}
+
+.teacher-exam-workspace .builder-heading {
+  position: relative;
+  overflow: hidden;
+  padding: 1.25rem 1.4rem;
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 20px;
+  background: linear-gradient(120deg, #07152f 0%, #0b2d63 58%, #2459c4 100%);
+  box-shadow: 0 20px 44px rgba(7, 21, 47, 0.16);
+}
+
+.teacher-exam-workspace .builder-heading h2 {
+  color: #ffffff;
+}
+
+.teacher-exam-workspace .builder-heading p {
+  color: #c9d8f6;
+}
+
+.teacher-exam-workspace .builder-setup-grid {
+  gap: 1.1rem;
+  align-items: stretch;
+}
+
+.teacher-exam-workspace .card,
+.teacher-exam-workspace .builder-section-rail,
+.teacher-exam-workspace .builder-editor-stage {
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  box-shadow: 0 18px 44px rgba(15, 23, 42, 0.07);
+}
+
+.teacher-exam-workspace .admin-builder-card {
+  height: 100%;
+  border-radius: 20px;
+  padding: 1.05rem;
+}
+
+.teacher-exam-workspace .card-title {
+  margin-bottom: 0.9rem;
+  color: #07152f;
+  font-size: 1.02rem;
+  font-weight: 850;
+}
+
+.teacher-exam-workspace .stack-form {
+  gap: 0.78rem;
+}
+
+.teacher-exam-workspace .form-field {
+  gap: 0.38rem;
+}
+
+.teacher-exam-workspace .form-field > span {
+  color: #53627c;
+  font-size: 0.78rem;
+  font-weight: 850;
+}
+
+.teacher-exam-workspace input,
+.teacher-exam-workspace textarea,
+.teacher-exam-workspace .form-field select:not([multiple]) {
+  width: 100%;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 14px;
+  background-color: #f8faff;
+  color: #0f172a;
+  box-shadow: none;
+}
+
+.teacher-exam-workspace input,
+.teacher-exam-workspace .form-field select:not([multiple]) {
+  min-height: 46px;
+}
+
+.teacher-exam-workspace textarea {
+  min-height: 112px;
+}
+
+.teacher-exam-workspace .form-field select:not([multiple]) {
+  appearance: none;
+  padding: 0.75rem 2.75rem 0.75rem 0.9rem;
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='18' height='18' viewBox='0 0 24 24' fill='none' stroke='%232563eb' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
+  background-position: right 0.85rem center, 0 0;
+  background-repeat: no-repeat;
+  background-size: 18px 18px, 100% 100%;
+  font-weight: 750;
+  transform: none;
+}
+
+.teacher-exam-workspace input:hover,
+.teacher-exam-workspace textarea:hover,
+.teacher-exam-workspace .form-field select:not([multiple]):hover {
+  border-color: rgba(15, 23, 42, 0.16);
+  background-color: #ffffff;
+  box-shadow: none;
+  transform: none;
+}
+
+.teacher-exam-workspace input:focus,
+.teacher-exam-workspace textarea:focus,
+.teacher-exam-workspace .form-field select:not([multiple]):focus,
+.teacher-exam-workspace input:focus-visible,
+.teacher-exam-workspace textarea:focus-visible,
+.teacher-exam-workspace .form-field select:not([multiple]):focus-visible {
+  border-color: rgba(15, 23, 42, 0.14);
+  outline: none;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.08);
+}
+
+.teacher-exam-workspace .publish-select-card,
+.teacher-exam-workspace .builder-test-dropdown {
+  border: 1px solid rgba(37, 99, 235, 0.1);
+  border-radius: 16px;
+  background: linear-gradient(135deg, #f8fbff, #eef4ff);
+}
+
+.teacher-exam-workspace .publish-select-card > span,
+.teacher-exam-workspace .builder-test-dropdown > span {
+  color: #334155;
+}
+
+.teacher-exam-workspace .publish-select-card small {
+  color: #64748b;
+}
+
+.teacher-exam-workspace .module-template-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.teacher-exam-workspace .module-template-grid button {
+  min-height: 44px;
+  border-color: rgba(15, 23, 42, 0.08);
+  border-radius: 13px;
+  background: #f8faff;
+  color: #53627c;
+  font-weight: 750;
+}
+
+.teacher-exam-workspace .module-template-grid button:hover {
+  border-color: rgba(37, 99, 235, 0.18);
+  background: #eff5ff;
+  color: #1d4ed8;
+}
+
+.teacher-exam-workspace .module-template-grid button.active {
+  border-color: transparent;
+  background: linear-gradient(135deg, #2f6cf4, #244ac7);
+  color: #ffffff;
+  box-shadow: 0 10px 24px rgba(37, 99, 235, 0.2);
+}
+
+.teacher-exam-workspace .button-primary {
+  border-color: transparent;
+  background: linear-gradient(135deg, #356df3, #244ac7);
+  color: #ffffff;
+  box-shadow: 0 12px 26px rgba(37, 99, 235, 0.2);
+}
+
+.teacher-exam-workspace .button-primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2e63df, #1e40af);
+  box-shadow: 0 16px 32px rgba(37, 99, 235, 0.25);
+}
+
+.teacher-exam-workspace .authoring-workspace {
+  gap: 1.1rem;
+}
+
+.teacher-exam-workspace .builder-section-rail,
+.teacher-exam-workspace .builder-editor-stage {
+  border-radius: 20px;
+}
+
+.teacher-exam-workspace .builder-rail-head,
+.teacher-exam-workspace .builder-editor-header {
+  border-color: rgba(15, 23, 42, 0.08);
+}
+
+.teacher-exam-workspace .builder-section-list button {
+  border-radius: 13px;
+}
+
+.teacher-exam-workspace .builder-section-list button:hover {
+  background: #f4f7fc;
+}
+
+.teacher-exam-workspace .builder-section-list button.active {
+  border-color: rgba(37, 99, 235, 0.16);
+  border-left-color: #2563eb;
+  background: #eef4ff;
+}
+
+.teacher-exam-workspace .editor-panel {
+  border-color: rgba(15, 23, 42, 0.08);
+  border-radius: 16px;
+  background: #f8faff;
+}
+
+.teacher-exam-workspace .admin-content-grid {
+  gap: 1.1rem;
+  margin-top: 0;
+}
+
+.teacher-exam-workspace .admin-content-grid > .card {
+  border-radius: 20px;
+}
+
+.teacher-exam-workspace .table-wrap {
+  border-color: rgba(15, 23, 42, 0.08);
+  border-radius: 14px;
+}
+
+.teacher-exam-workspace .data-table th {
+  background: #f4f7fc;
+  color: #61708a;
+}
+
+.teacher-exam-workspace .data-table td {
+  border-color: rgba(15, 23, 42, 0.07);
+}
+
+.teacher-exam-workspace .review-item {
+  border-color: rgba(15, 23, 42, 0.07);
+  border-radius: 14px;
+  background: #f8faff;
+}
+
+@media (max-width: 1180px) {
+  .teacher-exam-workspace .builder-setup-grid,
+  .teacher-exam-workspace .authoring-workspace,
+  .teacher-exam-workspace .reading-editor-grid,
+  .teacher-exam-workspace .math-editor-grid,
+  .teacher-exam-workspace .listening-editor-grid,
+  .teacher-exam-workspace .admin-content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-exam-workspace .builder-section-rail {
+    position: static;
+  }
+
+  .teacher-exam-workspace .builder-section-list {
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    max-height: 340px;
+  }
+}
+
+@media (max-width: 720px) {
+  .teacher-shell .app-main {
+    padding-inline: 0.8rem;
+  }
+
+  .teacher-exam-workspace {
+    gap: 0.9rem;
+  }
+
+  .teacher-exam-workspace .builder-heading {
+    padding: 1rem;
+    border-radius: 16px;
+  }
+
+  .teacher-exam-workspace .builder-heading h2 {
+    font-size: 1.18rem;
+  }
+
+  .teacher-exam-workspace .builder-heading p {
+    font-size: 0.88rem;
+  }
+
+  .teacher-exam-workspace .admin-builder-card,
+  .teacher-exam-workspace .admin-content-grid > .card {
+    border-radius: 16px;
+    padding: 0.9rem;
+  }
+
+  .teacher-exam-workspace .builder-field-row,
+  .teacher-exam-workspace .answer-meta-grid,
+  .teacher-exam-workspace .module-template-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-exam-workspace .builder-editor-header {
+    padding: 0.9rem;
+  }
+
+  .teacher-exam-workspace .builder-editor-header .button,
+  .teacher-exam-workspace .stack-form > .button {
+    width: 100%;
+  }
+
+  .teacher-exam-workspace .sat-question-editor {
+    padding: 0.85rem;
+  }
+
+  .teacher-exam-workspace .admin-data-table td.table-actions {
+    gap: 0.45rem;
+  }
+
+  .teacher-exam-workspace .admin-data-table td.table-actions .button {
+    flex: 1 1 100%;
+  }
+}

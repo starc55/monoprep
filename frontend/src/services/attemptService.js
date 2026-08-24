@@ -24,8 +24,3 @@ export async function getMyAttempts() {
   const { data } = await api.get('/attempts/me');
   return data.attempts;
 }
-
-export async function getAllAttempts() {
-  const { data } = await api.get('/admin/attempts');
-  return data.attempts;
-}

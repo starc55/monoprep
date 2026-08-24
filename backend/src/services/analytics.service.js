@@ -1,4 +1,5 @@
 import { prisma } from '../config/prisma.js';
+import { calculateGamification, toSatScore } from './gamification.service.js';
 
 function average(values) {
   if (!values.length) {
@@ -9,7 +10,7 @@ function average(values) {
 }
 
 export async function getStudentAnalytics(userId) {
-  const attempts = await prisma.attempt.findMany({
+  const [attempts, blitzSessions] = await Promise.all([prisma.attempt.findMany({
     where: {
       userId,
       status: {
@@ -38,7 +39,11 @@ export async function getStudentAnalytics(userId) {
       aiFeedback: true
     },
     orderBy: { startedAt: 'asc' }
-  });
+  }), prisma.blitzSession.findMany({
+    where: { userId, status: 'SUBMITTED' },
+    orderBy: { submittedAt: 'asc' }
+  })]);
+  const gamification = calculateGamification({ attempts, blitzSessions });
 
   const scoreHistory = attempts.map((attempt) => ({
     attemptId: attempt.id,
@@ -98,7 +103,8 @@ export async function getStudentAnalytics(userId) {
       bestScore: Math.max(0, ...attempts.map((attempt) => attempt.totalScore || 0)),
       weakSkills: weakTopics.map((item) => item.skill),
       recommendedPractice:
-        attempts.at(-1)?.aiFeedback?.feedback?.recommendedPractice || weakTopics.map((item) => item.skill)
+        attempts.at(-1)?.aiFeedback?.feedback?.recommendedPractice || weakTopics.map((item) => item.skill),
+      gamification
     },
     scoreHistory,
     accuracyBySkill,
@@ -112,9 +118,11 @@ export async function getStudentAnalytics(userId) {
 }
 
 export async function getAdminAnalytics() {
-  const [usersCount, examsCount, attempts, recentUsers] = await Promise.all([
+  const [usersCount, examsCount, publishedExamsCount, questionCount, attempts, recentUsers, recentExams] = await Promise.all([
     prisma.user.count(),
     prisma.exam.count(),
+    prisma.exam.count({ where: { isPublished: true } }),
+    prisma.question.count(),
     prisma.attempt.findMany({
       include: {
         exam: true,
@@ -137,6 +145,18 @@ export async function getAdminAnalytics() {
         role: true,
         createdAt: true
       }
+    }),
+    prisma.exam.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        type: true,
+        accessType: true,
+        isPublished: true,
+        createdAt: true
+      }
     })
   ]);
 
@@ -153,6 +173,8 @@ export async function getAdminAnalytics() {
     totals: {
       usersCount,
       examsCount,
+      publishedExamsCount,
+      questionCount,
       attemptsCount: attempts.length,
       submittedAttemptsCount: submittedAttempts.length,
       averageScore
@@ -167,12 +189,59 @@ export async function getAdminAnalytics() {
       totalScore: attempt.totalScore,
       startedAt: attempt.startedAt,
       submittedAt: attempt.submittedAt
-    }))
+    })),
+    recentExams,
+    attemptsOverTime: getDailyAttemptSeries(submittedAttempts),
+    scoreDistribution: getScoreDistribution(submittedAttempts)
   };
 }
 
+function getDailyAttemptSeries(attempts) {
+  const days = Array.from({ length: 14 }).map((_, index) => {
+    const date = new Date();
+    date.setDate(date.getDate() - (13 - index));
+    const key = date.toISOString().slice(0, 10);
+    return {
+      key,
+      label: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      attempts: 0
+    };
+  });
+  const dayMap = new Map(days.map((day) => [day.key, day]));
+
+  attempts.forEach((attempt) => {
+    const key = new Date(attempt.submittedAt || attempt.startedAt).toISOString().slice(0, 10);
+    const row = dayMap.get(key);
+    if (row) {
+      row.attempts += 1;
+    }
+  });
+
+  return days;
+}
+
+function getScoreDistribution(attempts) {
+  const buckets = [
+    { label: '400-799', min: 400, max: 799, students: 0 },
+    { label: '800-999', min: 800, max: 999, students: 0 },
+    { label: '1000-1199', min: 1000, max: 1199, students: 0 },
+    { label: '1200-1399', min: 1200, max: 1399, students: 0 },
+    { label: '1400-1600', min: 1400, max: 1600, students: 0 }
+  ];
+
+  attempts.forEach((attempt) => {
+    const score = toSatScore(attempt.totalScore);
+    const bucket = buckets.find((item) => score >= item.min && score <= item.max);
+    if (bucket) {
+      bucket.students += 1;
+    }
+  });
+
+  return buckets.map(({ label, students }) => ({ label, students }));
+}
+
 export async function getLeaderboard(userId) {
-  const attempts = await prisma.attempt.findMany({
+  const [attempts, blitzSessions] = await Promise.all([prisma.attempt.findMany({
     where: {
       status: {
         in: ['SUBMITTED', 'REVIEWED']
@@ -195,11 +264,19 @@ export async function getLeaderboard(userId) {
       }
     },
     orderBy: [{ totalScore: 'desc' }, { submittedAt: 'asc' }]
-  });
+  }), prisma.blitzSession.findMany({
+    where: { status: 'SUBMITTED' },
+    include: {
+      user: {
+        select: { id: true, fullName: true, username: true, avatarUrl: true }
+      }
+    },
+    orderBy: { submittedAt: 'asc' }
+  })]);
 
   const bestByUser = new Map();
   attempts.forEach((attempt) => {
-    const score = attempt.totalScore || 0;
+    const score = calculateGamification({ attempts: [attempt] }).bestScore;
     const current = bestByUser.get(attempt.userId);
     if (!current || score > current.score) {
       bestByUser.set(attempt.userId, {
@@ -216,7 +293,52 @@ export async function getLeaderboard(userId) {
     }
   });
 
-  const rows = [...bestByUser.values()]
+  blitzSessions.forEach((session) => {
+    if (bestByUser.has(session.userId)) return;
+    bestByUser.set(session.userId, {
+      userId: session.userId,
+      name: session.user.username ? `@${session.user.username}` : session.user.fullName,
+      avatarUrl: session.user.avatarUrl,
+      score: 0,
+      readingWritingScore: 0,
+      mathScore: 0,
+      examTitle: 'Blitz Arena',
+      examType: 'BLITZ',
+      submittedAt: session.submittedAt || session.startedAt
+    });
+  });
+
+  const blitzByUser = new Map();
+  blitzSessions.forEach((session) => {
+    const rows = blitzByUser.get(session.userId) || [];
+    rows.push(session);
+    blitzByUser.set(session.userId, rows);
+  });
+  const attemptsByUser = new Map();
+  attempts.forEach((attempt) => {
+    const rows = attemptsByUser.get(attempt.userId) || [];
+    rows.push(attempt);
+    attemptsByUser.set(attempt.userId, rows);
+  });
+
+  const rows = [...bestByUser.values()].map((row) => {
+    const userAttempts = attemptsByUser.get(row.userId) || [];
+    const userBlitz = blitzByUser.get(row.userId) || [];
+    const gamification = calculateGamification({
+      attempts: userAttempts,
+      blitzSessions: userBlitz
+    });
+    const activityDates = [
+      ...userAttempts.map((attempt) => attempt.submittedAt || attempt.startedAt),
+      ...userBlitz.map((session) => session.submittedAt || session.startedAt)
+    ].filter(Boolean).map((value) => new Date(value).getTime());
+    return {
+      ...row,
+      submittedAt: activityDates.length ? new Date(Math.max(...activityDates)) : row.submittedAt,
+      score: gamification.leagueScore,
+      ...gamification
+    };
+  })
     .sort((a, b) => b.score - a.score || new Date(a.submittedAt) - new Date(b.submittedAt))
     .map((row, index) => ({
       ...row,

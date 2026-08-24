@@ -3,19 +3,76 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum Role {
   STUDENT
+  TEACHER
   ADMIN
+}
+
+enum AccountStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+  REJECTED
+}
+
+enum TeacherStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
+
+enum TeacherAccessRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SUSPENDED
 }
 
 enum ExamType {
   FULL_LENGTH
   PRACTICE
   CUSTOM
+}
+
+enum ExamAccessType {
+  FREE
+  PAID
+}
+
+enum ExamContentMode {
+  REAL_EXAM
+  QUESTION_HUB
+}
+
+enum ExamSource {
+  MONOPREP
+  OFFICIAL
+}
+
+enum CompetitionKind {
+  NONE
+  FULL
+  MATH
+  ENGLISH
+}
+
+enum BlitzStatus {
+  IN_PROGRESS
+  SUBMITTED
+}
+
+enum ArenaStatus {
+  WAITING
+  ACTIVE
+  COMPLETED
+  CANCELLED
 }
 
 enum SectionType {
@@ -46,39 +103,140 @@ enum AttemptStatus {
   REVIEWED
 }
 
-model User {
-  id           String       @id @default(cuid())
-  fullName     String       @map("full_name")
-  email        String       @unique
-  username     String?      @unique
-  avatarUrl    String?      @map("avatar_url")
-  passwordHash String       @map("password_hash")
-  role         Role         @default(STUDENT)
-  createdAt    DateTime     @default(now()) @map("created_at")
-  updatedAt    DateTime     @updatedAt @map("updated_at")
-  attempts     Attempt[]
-  aiFeedbacks  AIFeedback[]
-  skillStats   SkillStat[]
+enum NotificationType {
+  FOLLOW
+  ACHIEVEMENT
+  TEST_SUBMITTED
+  SCORE_IMPROVED
+  AI_FEEDBACK_READY
+}
 
+model User {
+  id                      String                 @id @default(cuid())
+  authUserId              String?                @unique @map("auth_user_id") @db.Uuid
+  fullName                String                 @map("full_name")
+  email                   String                 @unique
+  username                String?                @unique
+  avatarUrl               String?                @map("avatar_url")
+  passwordHash            String?                @map("password_hash")
+  role                    Role                   @default(STUDENT)
+  status                  AccountStatus          @default(ACTIVE)
+  premiumUntil            DateTime?              @map("premium_until")
+  authTokenVersion        Int                    @default(0) @map("auth_token_version")
+  createdAt               DateTime               @default(now()) @map("created_at")
+  updatedAt               DateTime               @updatedAt @map("updated_at")
+  attempts                Attempt[]
+  aiFeedbacks             AIFeedback[]
+  skillStats              SkillStat[]
+  following               Follow[]               @relation("FollowFollower")
+  followers               Follow[]               @relation("FollowFollowing")
+  notifications           Notification[]
+  achievements            UserAchievement[]
+  teacherProfile          TeacherProfile?
+  desmosLessons           DesmosLesson[]         @relation("DesmosLessonCreator")
+  blitzSessions           BlitzSession[]
+  arenaChallenges         ArenaMatch[]           @relation("ArenaChallenger")
+  arenaOpponents          ArenaMatch[]           @relation("ArenaOpponent")
+  questionHubProgress     QuestionHubProgress[]
+  reviewedTeacherRequests TeacherAccessRequest[] @relation("TeacherRequestReviewer")
+
+  @@index([premiumUntil])
   @@map("users")
 }
 
-model Mentor {
-  id        String   @id @default(cuid())
-  name      String
-  subject   String
-  bio       String?
-  imageUrl  String?  @map("image_url")
-  telegram  String?
-  phone     String?
-  slots     Json?
-  rating    Float    @default(5)
-  isActive  Boolean  @default(true) @map("is_active")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+model TeacherProfile {
+  id             String                @id @default(cuid())
+  userId         String                @unique @map("user_id")
+  subject        String
+  experience     String?
+  bio            String?
+  status         TeacherStatus         @default(PENDING)
+  contactEnabled Boolean               @default(false) @map("contact_enabled")
+  contactEmail   String?               @map("contact_email")
+  contactPhone   String?               @map("contact_phone")
+  telegram       String?
+  createdAt      DateTime              @default(now()) @map("created_at")
+  updatedAt      DateTime              @updatedAt @map("updated_at")
+  user           User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessRequest  TeacherAccessRequest?
 
-  @@index([isActive, createdAt])
-  @@map("mentors")
+  @@index([status, createdAt])
+  @@map("teacher_profiles")
+}
+
+model TeacherAccessRequest {
+  id              String                     @id @default(cuid())
+  teacherId       String                     @unique @map("teacher_id")
+  status          TeacherAccessRequestStatus @default(PENDING)
+  requestedAt     DateTime                   @default(now()) @map("requested_at")
+  reviewedAt      DateTime?                  @map("reviewed_at")
+  reviewedBy      String?                    @map("reviewed_by")
+  rejectionReason String?                    @map("rejection_reason")
+  createdAt       DateTime                   @default(now()) @map("created_at")
+  updatedAt       DateTime                   @updatedAt @map("updated_at")
+  teacher         TeacherProfile             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  reviewer        User?                      @relation("TeacherRequestReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+
+  @@index([status, requestedAt])
+  @@index([reviewedBy])
+  @@map("teacher_access_requests")
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String   @map("follower_id")
+  followingId String   @map("following_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  follower    User     @relation("FollowFollower", fields: [followerId], references: [id], onDelete: Cascade)
+  following   User     @relation("FollowFollowing", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followingId, createdAt])
+  @@index([followerId, createdAt])
+  @@map("follows")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           @map("user_id")
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false) @map("is_read")
+  metadata  Json?
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model Achievement {
+  id          String            @id @default(cuid())
+  code        String            @unique
+  title       String
+  description String
+  icon        String
+  condition   Json?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  users       UserAchievement[]
+
+  @@map("achievements")
+}
+
+model UserAchievement {
+  id            String      @id @default(cuid())
+  userId        String      @map("user_id")
+  achievementId String      @map("achievement_id")
+  unlockedAt    DateTime    @default(now()) @map("unlocked_at")
+  user          User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  achievement   Achievement @relation(fields: [achievementId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, achievementId])
+  @@index([userId, unlockedAt])
+  @@index([achievementId])
+  @@map("user_achievements")
 }
 
 model QuestionBankItem {
@@ -101,19 +259,115 @@ model QuestionBankItem {
   @@map("question_bank_items")
 }
 
-model Exam {
-  id            String    @id @default(cuid())
-  title         String
-  description   String
-  type          ExamType
-  totalDuration Int       @map("total_duration")
-  isPublished   Boolean   @default(false) @map("is_published")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
-  sections      Section[]
-  attempts      Attempt[]
+model QuestionHubProgress {
+  id          String   @id @default(cuid())
+  userId      String   @map("user_id")
+  questionKey String   @map("question_key")
+  answer      Json?
+  answered    Boolean  @default(false)
+  correct     Boolean?
+  marked      Boolean  @default(false)
+  attempts    Int      @default(0)
+  timeSpent   Int      @default(0) @map("time_spent")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  @@unique([userId, questionKey])
+  @@index([userId, updatedAt])
+  @@map("question_hub_progress")
+}
+
+model DesmosLesson {
+  id          String   @id @default(cuid())
+  title       String
+  summary     String
+  theory      String
+  imageUrl    String?  @map("image_url")
+  imageUrls   Json?    @map("image_urls")
+  isPublished Boolean  @default(false) @map("is_published")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdById String?  @map("created_by_id")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  createdBy   User?    @relation("DesmosLessonCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([isPublished, sortOrder])
+  @@index([createdById])
+  @@map("desmos_lessons")
+}
+
+model Exam {
+  id                  String          @id @default(cuid())
+  title               String
+  description         String
+  type                ExamType
+  accessType          ExamAccessType  @default(FREE) @map("access_type")
+  contentMode         ExamContentMode @default(REAL_EXAM) @map("content_mode")
+  source              ExamSource      @default(MONOPREP) @map("exam_source")
+  competitionKind     CompetitionKind @default(NONE) @map("competition_kind")
+  competitionStartsAt DateTime?       @map("competition_starts_at")
+  competitionEndsAt   DateTime?       @map("competition_ends_at")
+  referenceText       String?         @map("reference_text")
+  totalDuration       Int             @map("total_duration")
+  isPublished         Boolean         @default(false) @map("is_published")
+  createdAt           DateTime        @default(now()) @map("created_at")
+  updatedAt           DateTime        @updatedAt @map("updated_at")
+  sections            Section[]
+  attempts            Attempt[]
+
+  @@index([source, isPublished, createdAt])
   @@map("exams")
+}
+
+model BlitzSession {
+  id           String      @id @default(cuid())
+  userId       String      @map("user_id")
+  size         Int
+  subject      String?
+  status       BlitzStatus @default(IN_PROGRESS)
+  questionRefs Json        @map("question_refs")
+  answers      Json?
+  correctCount Int?        @map("correct_count")
+  score        Int?
+  xpEarned     Int         @default(0) @map("xp_earned")
+  startedAt    DateTime    @default(now()) @map("started_at")
+  submittedAt  DateTime?   @map("submitted_at")
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @updatedAt @map("updated_at")
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, startedAt])
+  @@index([status, startedAt])
+  @@map("blitz_sessions")
+}
+
+model ArenaMatch {
+  id                String      @id @default(cuid())
+  challengerId      String      @map("challenger_id")
+  opponentId        String?     @map("opponent_id")
+  size              Int
+  subject           String
+  status            ArenaStatus @default(WAITING)
+  questionRefs      Json        @map("question_refs")
+  challengerAnswers Json?       @map("challenger_answers")
+  opponentAnswers   Json?       @map("opponent_answers")
+  challengerScore   Int?        @map("challenger_score")
+  opponentScore     Int?        @map("opponent_score")
+  challengerXp      Int         @default(0) @map("challenger_xp")
+  opponentXp        Int         @default(0) @map("opponent_xp")
+  winnerId          String?     @map("winner_id")
+  createdAt         DateTime    @default(now()) @map("created_at")
+  startedAt         DateTime?   @map("started_at")
+  completedAt       DateTime?   @map("completed_at")
+  updatedAt         DateTime    @updatedAt @map("updated_at")
+  challenger        User        @relation("ArenaChallenger", fields: [challengerId], references: [id], onDelete: Cascade)
+  opponent          User?       @relation("ArenaOpponent", fields: [opponentId], references: [id], onDelete: Cascade)
+
+  @@index([status, subject, size, createdAt])
+  @@index([challengerId, createdAt])
+  @@index([opponentId, createdAt])
+  @@map("arena_matches")
 }
 
 model Section {
@@ -133,44 +387,48 @@ model Section {
 }
 
 model Passage {
-  id        String     @id @default(cuid())
-  title     String
-  content   String
-  category  String
-  createdAt DateTime   @default(now()) @map("created_at")
-  updatedAt DateTime   @updatedAt @map("updated_at")
-  questions Question[]
+  id                 String     @id @default(cuid())
+  title              String
+  content            String
+  category           String
+  attachmentUrl      String?    @map("attachment_url")
+  attachmentName     String?    @map("attachment_name")
+  attachmentMimeType String?    @map("attachment_mime_type")
+  createdAt          DateTime   @default(now()) @map("created_at")
+  updatedAt          DateTime   @updatedAt @map("updated_at")
+  questions          Question[]
 
   @@map("passages")
 }
 
 model Question {
-  id            String       @id @default(cuid())
-  sectionId     String       @map("section_id")
-  passageId     String?      @map("passage_id")
-  type          QuestionType
-  skill         String
-  difficulty    Difficulty
-  questionText  String       @map("question_text")
-  audioUrl      String?      @map("audio_url")
-  audioTitle    String?      @map("audio_title")
-  instructions  String?
-  imageUrl      String?      @map("image_url")
-  formulaText   String?      @map("formula_text")
-  tableData     Json?        @map("table_data")
-  calculatorAllowed Boolean  @default(false) @map("calculator_allowed")
-  transcript    String?
-  audioReplayLimit Int?      @map("audio_replay_limit")
-  acceptedAnswers Json?      @map("accepted_answers")
-  correctAnswer Json         @map("correct_answer")
-  explanation   String
-  order         Int          @map("order_index")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
-  section       Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
-  passage       Passage?     @relation(fields: [passageId], references: [id], onDelete: SetNull)
-  options       Option[]
-  userAnswers   UserAnswer[]
+  id                String       @id @default(cuid())
+  sectionId         String       @map("section_id")
+  passageId         String?      @map("passage_id")
+  type              QuestionType
+  skill             String
+  difficulty        Difficulty
+  questionText      String       @map("question_text")
+  audioUrl          String?      @map("audio_url")
+  audioTitle        String?      @map("audio_title")
+  instructions      String?
+  imageUrl          String?      @map("image_url")
+  formulaText       String?      @map("formula_text")
+  tableData         Json?        @map("table_data")
+  calculatorAllowed Boolean      @default(false) @map("calculator_allowed")
+  transcript        String?
+  audioReplayLimit  Int?         @map("audio_replay_limit")
+  acceptedAnswers   Json?        @map("accepted_answers")
+  correctAnswer     Json         @map("correct_answer")
+  explanation       String
+  explanationImageUrl String?    @map("explanation_image_url")
+  order             Int          @map("order_index")
+  createdAt         DateTime     @default(now()) @map("created_at")
+  updatedAt         DateTime     @updatedAt @map("updated_at")
+  section           Section      @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  passage           Passage?     @relation(fields: [passageId], references: [id], onDelete: SetNull)
+  options           Option[]
+  userAnswers       UserAnswer[]
 
   @@index([sectionId, order])
   @@index([passageId])
@@ -217,17 +475,17 @@ model Attempt {
 }
 
 model UserAnswer {
-  id              String    @id @default(cuid())
-  attemptId       String    @map("attempt_id")
-  questionId      String    @map("question_id")
+  id              String   @id @default(cuid())
+  attemptId       String   @map("attempt_id")
+  questionId      String   @map("question_id")
   answer          Json
-  isCorrect       Boolean?  @map("is_correct")
-  timeSpent       Int       @default(0) @map("time_spent")
-  markedForReview Boolean   @default(false) @map("marked_for_review")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  attempt         Attempt   @relation(fields: [attemptId], references: [id], onDelete: Cascade)
-  question        Question  @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  isCorrect       Boolean? @map("is_correct")
+  timeSpent       Int      @default(0) @map("time_spent")
+  markedForReview Boolean  @default(false) @map("marked_for_review")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  attempt         Attempt  @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question        Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
 
   @@unique([attemptId, questionId])
   @@index([questionId])

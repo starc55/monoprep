@@ -1,0 +1,205 @@
+.desmos-hack-page {
+  display: grid;
+  gap: 14px;
+}
+
+.desmos-lessons-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, .8fr);
+  align-items: center;
+  gap: 20px;
+  min-height: 78px;
+  padding: 14px 16px;
+  border: 1px solid rgba(15, 23, 42, 0.09);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.06);
+}
+
+.desmos-lessons-toolbar > div {
+  display: grid;
+  gap: 4px;
+}
+
+.desmos-lessons-toolbar span {
+  color: #2563eb;
+  font-size: 0.68rem;
+  font-weight: 850;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.desmos-lessons-toolbar strong {
+  color: #07152f;
+  font-size: 1rem;
+}
+
+.desmos-lessons-toolbar p {
+  margin: 0;
+  color: #52617a;
+  font-size: .78rem;
+  line-height: 1.55;
+}
+
+.desmos-dock-trigger {
+  position: fixed;
+  z-index: 210;
+  right: 0;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 72px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-right: 0;
+  border-radius: 50px 0 0 50px;
+  color: #fff;
+  background: linear-gradient(135deg, #0b1f45, #1d4ed8);
+  box-shadow: 0 14px 34px rgba(15, 23, 42, .22);
+  transform: translateY(-50%);
+  cursor: pointer;
+  transition: background .18s ease, box-shadow .18s ease;
+}
+
+.desmos-dock-trigger:hover,
+.desmos-dock-trigger:focus-visible {
+  background: #245eea;
+  box-shadow: 0 16px 38px rgba(36, 94, 234, .3);
+  transform: translateY(-50%);
+}
+
+.desmos-dock-trigger:active {
+  transform: translateY(-50%) scale(.98);
+}
+.desmos-dock-trigger svg { width: 21px; height: 21px; }
+
+.desmos-lesson-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.desmos-lesson {
+  display: grid;
+  grid-template-columns: minmax(150px, 38%) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 14px 38px rgba(15, 23, 42, 0.07);
+}
+
+.desmos-lesson.expanded { grid-column: 1 / -1; }
+
+.desmos-lesson-media {
+  position: relative;
+  min-height: 170px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: #edf3fb;
+  cursor: pointer;
+}
+
+.desmos-lesson-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.desmos-image-count {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  padding: 5px 9px;
+  border: 1px solid rgba(255, 255, 255, .2);
+  border-radius: 999px;
+  color: #fff;
+  background: rgba(7, 21, 47, .8);
+  box-shadow: 0 6px 18px rgba(7, 21, 47, .2);
+  backdrop-filter: blur(8px);
+  font-size: .66rem;
+  font-weight: 800;
+}
+
+.desmos-lesson-media.placeholder { display: grid; place-items: center; color: #2563eb; }
+.desmos-lesson-media.placeholder svg { width: 62px; height: 62px; }
+
+.desmos-lesson-copy { display: flex; flex-direction: column; align-items: flex-start; padding: 16px; }
+.desmos-lesson-copy > span { color: #2563eb; font-size: 0.76rem; font-weight: 800; text-transform: uppercase; }
+.desmos-lesson-copy h3 { margin: 6px 0; color: #07152f; font-size: 1rem; }
+.desmos-lesson-copy p { margin: 0 0 14px; color: #64748b; font-size: .82rem; line-height: 1.5; }
+
+.desmos-expand-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 0;
+  border: 0;
+  color: #1d4ed8;
+  font-weight: 800;
+  background: transparent;
+  cursor: pointer;
+}
+
+.desmos-lesson.expanded .desmos-expand-button svg { transform: rotate(180deg); }
+
+.desmos-theory {
+  grid-column: 1 / -1;
+  padding: 16px;
+  border-top: 1px solid rgba(15, 23, 42, 0.08);
+  color: #334155;
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.desmos-lesson-gallery {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  padding: 0 16px 16px;
+}
+
+.desmos-lesson-gallery img {
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 7px;
+  object-fit: cover;
+}
+
+.desmos-admin-lesson-cell { display: flex; align-items: center; gap: 12px; min-width: 260px; }
+.desmos-admin-lesson-cell img,
+.desmos-admin-lesson-cell > svg { width: 54px; height: 54px; flex: 0 0 54px; border-radius: 12px; object-fit: cover; }
+.desmos-admin-lesson-cell > svg { padding: 12px; color: #2563eb; background: #eff6ff; }
+.desmos-admin-lesson-cell span { display: grid; gap: 4px; }
+.desmos-admin-lesson-cell small { max-width: 520px; overflow: hidden; color: #64748b; text-overflow: ellipsis; white-space: nowrap; }
+.desmos-theory-input { min-height: 180px; }
+.desmos-upload-preview { width: min(100%, 420px); max-height: 240px; margin-top: 10px; border-radius: 14px; object-fit: cover; }
+.desmos-upload-gallery { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; margin-top: 10px; }
+.desmos-upload-gallery figure { position: relative; overflow: hidden; aspect-ratio: 4 / 3; margin: 0; border: 1px solid rgba(15, 23, 42, .09); border-radius: 7px; background: #edf3fb; }
+.desmos-upload-gallery figure img { width: 100%; height: 100%; object-fit: cover; }
+.desmos-upload-gallery figure button { position: absolute; top: 5px; right: 5px; display: grid; place-items: center; width: 25px; height: 25px; padding: 0; border: 1px solid rgba(255,255,255,.32); border-radius: 50%; color: #fff; background: rgba(7,21,47,.82); cursor: pointer; }
+.desmos-upload-gallery figure button svg { width: 13px; height: 13px; }
+.desmos-upload-gallery figure span { position: absolute; left: 5px; bottom: 5px; padding: 3px 6px; border-radius: 999px; color: #fff; background: rgba(7,21,47,.82); font-size: .58rem; font-weight: 800; }
+.desmos-file-picker { display: grid; grid-template-columns: 42px minmax(0, 1fr); align-items: center; gap: 10px; min-height: 68px; padding: 10px; border: 1px dashed rgba(36, 94, 234, .34); border-radius: 7px; color: #245eea; background: #f6f9ff; cursor: pointer; }
+.desmos-file-picker:hover { border-color: #245eea; background: #edf3ff; }
+.desmos-file-picker input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.desmos-file-picker > svg { width: 40px; height: 40px; padding: 9px; border-radius: 6px; background: #e4edff; }
+.desmos-file-picker > span { display: grid; gap: 2px; }
+.desmos-file-picker b { color: #0b1f45; font-size: .78rem; }
+.desmos-file-picker small { color: #64748b; font-size: .68rem; }
+
+@media (max-width: 980px) {
+  .desmos-lessons-toolbar,
+  .desmos-lesson-grid { grid-template-columns: 1fr; }
+  .desmos-lesson.expanded { grid-column: auto; }
+}
+
+@media (max-width: 640px) {
+  .desmos-lessons-toolbar { padding: 12px; }
+  .desmos-lesson { grid-template-columns: 1fr; }
+  .desmos-lesson-media { min-height: 190px; }
+}

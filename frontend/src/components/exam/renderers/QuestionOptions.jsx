@@ -1,4 +1,5 @@
 import { resolveAssetUrl } from '../../../utils/assets.js';
+import MathJaxContent from '../../math/MathJaxContent.jsx';
 
 export default function QuestionOptions({
   question,
@@ -38,7 +39,7 @@ export default function QuestionOptions({
           >
             <span className="choice-label">{option.label}</span>
             <span className="choice-content">
-              <span className="choice-text">{option.text}</span>
+              <MathJaxContent className="choice-text">{option.text}</MathJaxContent>
               {option.imageUrl ? (
                 <span className="choice-media">
                   <img src={resolveAssetUrl(option.imageUrl)} alt={`Answer choice ${option.label} image`} />

@@ -1,7 +1,10 @@
 import { prisma } from "../config/prisma.js";
+import { env } from "../config/env.js";
 import { attemptReviewInclude, examDeepInclude } from "../prisma/selects.js";
 import { ApiError } from "../utils/apiError.js";
 import { buildScoreSummary, evaluateAnswer } from "./scoring.service.js";
+import { evaluateAchievementsForUser } from "./achievement.service.js";
+import { createNotification } from "./notification.service.js";
 
 function getActiveSections(sections = []) {
   return sections.filter((section) => section.type !== "listening");
@@ -30,6 +33,7 @@ function sanitizeQuestion(question, includeCorrectAnswers = false) {
       id: option.id,
       label: option.label,
       text: option.text,
+      imageUrl: option.imageUrl,
       ...(includeCorrectAnswers ? { isCorrect: option.isCorrect } : {}),
     })),
     ...(includeCorrectAnswers
@@ -38,6 +42,7 @@ function sanitizeQuestion(question, includeCorrectAnswers = false) {
           acceptedAnswers: question.acceptedAnswers,
           transcript: question.transcript,
           explanation: question.explanation,
+          explanationImageUrl: question.explanationImageUrl,
         }
       : {}),
   };
@@ -56,6 +61,15 @@ function sanitizeExam(
     title: exam.title,
     description: exam.description,
     type: exam.type,
+    accessType: exam.accessType || "FREE",
+    contentMode: exam.contentMode || "REAL_EXAM",
+    source: exam.source || "MONOPREP",
+    competitionKind: exam.competitionKind || "NONE",
+    competitionStartsAt: exam.competitionStartsAt || null,
+    competitionEndsAt: exam.competitionEndsAt || null,
+    referenceText: exam.referenceText || null,
+    premium: exam.accessType === "PAID",
+    isPremium: exam.accessType === "PAID",
     totalDuration: exam.totalDuration,
     isPublished: exam.isPublished,
     createdAt: exam.createdAt,
@@ -81,6 +95,86 @@ function sanitizeExam(
   };
 }
 
+function canManageExams(user = {}) {
+  return Boolean(
+    (user.role === "ADMIN" && user.status === "ACTIVE") ||
+      (user.role === "TEACHER" &&
+        user.status === "ACTIVE" &&
+        user.teacherProfile?.status === "APPROVED")
+  );
+}
+
+function canUsePaidExam(user = {}) {
+  return Boolean(
+    canManageExams(user) ||
+      (user.premiumUntil && new Date(user.premiumUntil) > new Date())
+  );
+}
+
+function assertExamAccess(exam, user) {
+  if (exam.accessType === "PAID" && !canUsePaidExam(user)) {
+    throw new ApiError(403, "This exam requires premium access.");
+  }
+}
+
+function assertCompetitionAccess(exam, user) {
+  if (user.role !== "STUDENT" || exam.competitionKind === "NONE") return;
+  const now = Date.now();
+  const startsAt = exam.competitionStartsAt ? new Date(exam.competitionStartsAt).getTime() : null;
+  const endsAt = exam.competitionEndsAt ? new Date(exam.competitionEndsAt).getTime() : null;
+  if (startsAt && now < startsAt) {
+    throw new ApiError(403, "This competition has not started yet.");
+  }
+  if (endsAt && now > endsAt) {
+    throw new ApiError(410, "This competition has ended.");
+  }
+}
+
+function getAttemptDeadline(attempt) {
+  const sectionDuration = getActiveSections(attempt.exam?.sections || []).reduce(
+    (total, section) => total + Math.max(0, Number(section.duration) || 0),
+    0
+  );
+  const examDuration = Math.max(
+    sectionDuration,
+    Math.max(0, Number(attempt.exam?.totalDuration) || 0)
+  );
+  if (!examDuration || !attempt.startedAt) {
+    return null;
+  }
+
+  return new Date(
+    new Date(attempt.startedAt).getTime()
+      + (examDuration + env.examSubmissionGraceMinutes) * 60 * 1000
+  );
+}
+
+function assertAttemptAcceptsAnswers(attempt) {
+  const deadline = getAttemptDeadline(attempt);
+  if (deadline && Date.now() > deadline.getTime()) {
+    throw new ApiError(409, 'The server-side exam time limit has expired. Submit the saved answers.', {
+      expiredAt: deadline.toISOString()
+    });
+  }
+}
+
+async function runSerializableTransaction(work, retries = 3) {
+  for (let attempt = 1; attempt <= retries; attempt += 1) {
+    try {
+      return await prisma.$transaction(work, {
+        isolationLevel: "Serializable",
+        maxWait: 10_000,
+        timeout: 30_000,
+      });
+    } catch (error) {
+      if (error?.code !== "P2034" || attempt === retries) {
+        throw error;
+      }
+    }
+  }
+  throw new ApiError(409, "The attempt changed while it was being submitted. Please retry.");
+}
+
 function mapAnswer(answer) {
   if (!answer) {
     return null;
@@ -100,6 +194,7 @@ function mapAnswer(answer) {
 }
 
 export async function listExamsForUser(user) {
+  const canManage = canManageExams(user);
   const include = {
     sections: {
       orderBy: { order: "asc" },
@@ -114,7 +209,7 @@ export async function listExamsForUser(user) {
     },
   };
 
-  if (user.role !== "ADMIN") {
+  if (!canManage) {
     include.attempts = {
       where: {
         userId: user.id,
@@ -133,7 +228,7 @@ export async function listExamsForUser(user) {
   }
 
   const exams = await prisma.exam.findMany({
-    where: user.role === "ADMIN" ? {} : { isPublished: true },
+    where: canManage ? {} : { isPublished: true },
     include,
     orderBy: { createdAt: "desc" },
   });
@@ -142,6 +237,7 @@ export async function listExamsForUser(user) {
 }
 
 export async function getExamForUser(examId, user) {
+  const canManage = canManageExams(user);
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
     include: examDeepInclude,
@@ -151,11 +247,14 @@ export async function getExamForUser(examId, user) {
     throw new ApiError(404, "Exam not found.");
   }
 
-  if (!exam.isPublished && user.role !== "ADMIN") {
+  if (!exam.isPublished && !canManage) {
     throw new ApiError(403, "This exam is not available yet.");
   }
 
-  return sanitizeExam(exam, true, user.role === "ADMIN");
+  assertExamAccess(exam, user);
+  assertCompetitionAccess(exam, user);
+
+  return sanitizeExam(exam, true, canManage);
 }
 
 export async function startAttemptForUser(user, examId) {
@@ -168,47 +267,51 @@ export async function startAttemptForUser(user, examId) {
     throw new ApiError(404, "Published exam not found.");
   }
 
-  const existingAttempt = await prisma.attempt.findFirst({
-    where: {
-      userId: user.id,
-      examId,
-      status: "IN_PROGRESS",
-    },
-    include: attemptReviewInclude,
-  });
+  assertExamAccess(exam, user);
+  assertCompetitionAccess(exam, user);
 
-  if (existingAttempt) {
-    return buildAttemptResponse(existingAttempt, false);
-  }
+  return runSerializableTransaction(async (tx) => {
+    const lockKey = `${user.id}:${examId}`;
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))::text AS locked`;
 
-  if (exam.type === "FULL_LENGTH") {
-    const completedAttempt = await prisma.attempt.findFirst({
+    const existingAttempt = await tx.attempt.findFirst({
       where: {
         userId: user.id,
         examId,
-        status: {
-          in: ["SUBMITTED", "REVIEWED"],
-        },
+        status: "IN_PROGRESS",
       },
-      orderBy: [{ submittedAt: "desc" }, { startedAt: "desc" }],
-      select: { id: true },
+      include: attemptReviewInclude,
     });
 
-    if (completedAttempt) {
-      throw new ApiError(409, "Full length exams can only be completed once.", {
-        attemptId: completedAttempt.id,
-      });
+    if (existingAttempt) {
+      return buildAttemptResponse(existingAttempt, false);
     }
-  }
 
-  const attempt = await prisma.attempt.create({
-    data: {
-      userId: user.id,
-      examId,
-    },
+    if (exam.type === "FULL_LENGTH") {
+      const completedAttempt = await tx.attempt.findFirst({
+        where: {
+          userId: user.id,
+          examId,
+          status: { in: ["SUBMITTED", "REVIEWED"] },
+        },
+        orderBy: [{ submittedAt: "desc" }, { startedAt: "desc" }],
+        select: { id: true },
+      });
+
+      if (completedAttempt) {
+        throw new ApiError(409, "Full length exams can only be completed once.", {
+          attemptId: completedAttempt.id,
+        });
+      }
+    }
+
+    return tx.attempt.create({
+      data: {
+        userId: user.id,
+        examId,
+      },
+    });
   });
-
-  return attempt;
 }
 
 export async function saveAttemptAnswer(attemptId, userId, payload) {
@@ -228,6 +331,7 @@ export async function saveAttemptAnswer(attemptId, userId, payload) {
   if (attempt.status !== "IN_PROGRESS") {
     throw new ApiError(400, "This attempt has already been submitted.");
   }
+  assertAttemptAcceptsAnswers(attempt);
 
   const question = getActiveSections(attempt.exam.sections)
     .flatMap((section) => section.questions)
@@ -309,7 +413,7 @@ function buildSkillBreakdown(questionResults) {
   });
 }
 
-async function updateSkillStats(userId, questionResults) {
+async function updateSkillStats(userId, questionResults, db = prisma) {
   const skillMap = new Map();
 
   questionResults.forEach((item) => {
@@ -329,7 +433,7 @@ async function updateSkillStats(userId, questionResults) {
 
   await Promise.all(
     [...skillMap.values()].map(async (entry) => {
-      const existing = await prisma.skillStat.findUnique({
+      const existing = await db.skillStat.findUnique({
         where: {
           userId_skill: {
             userId,
@@ -345,7 +449,7 @@ async function updateSkillStats(userId, questionResults) {
         ? Math.round((questionsCorrect / questionsSeen) * 100)
         : 0;
 
-      return prisma.skillStat.upsert({
+      return db.skillStat.upsert({
         where: {
           userId_skill: {
             userId,
@@ -370,72 +474,135 @@ async function updateSkillStats(userId, questionResults) {
 }
 
 export async function submitAttempt(attemptId, userId) {
-  const attempt = await prisma.attempt.findUnique({
-    where: { id: attemptId },
-    include: attemptReviewInclude,
+  const result = await runSerializableTransaction(async (tx) => {
+    const attempt = await tx.attempt.findUnique({
+      where: { id: attemptId },
+      include: attemptReviewInclude,
+    });
+
+    if (!attempt || attempt.userId !== userId) {
+      throw new ApiError(404, "Attempt not found.");
+    }
+
+    if (attempt.status !== "IN_PROGRESS") {
+      return { updatedAttempt: attempt, previousBestAttempt: null, didSubmit: false };
+    }
+
+    const answersByQuestionId = new Map(
+      attempt.answers.map((answer) => [answer.questionId, answer])
+    );
+    const questionResults = getActiveSections(attempt.exam.sections).flatMap((section) =>
+      section.questions.map((question) => {
+        const savedAnswer = answersByQuestionId.get(question.id);
+        return {
+          sectionId: section.id,
+          question,
+          savedAnswer,
+          isCorrect: evaluateAnswer(question, savedAnswer?.answer),
+        };
+      })
+    );
+    const scoreSummary = buildScoreSummary(attempt.exam, questionResults);
+    const previousBestAttempt = await tx.attempt.findFirst({
+      where: {
+        userId,
+        status: { in: ["SUBMITTED", "REVIEWED"] },
+      },
+      orderBy: { totalScore: "desc" },
+      select: { totalScore: true },
+    });
+
+    await Promise.all(
+      questionResults
+        .filter((item) => item.savedAnswer)
+        .map((item) =>
+          tx.userAnswer.update({
+            where: { id: item.savedAnswer.id },
+            data: { isCorrect: item.isCorrect },
+          })
+        )
+    );
+
+    const submittedAt = new Date();
+    const elapsedSeconds = Math.max(
+      1,
+      Math.floor((submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000)
+    );
+    const deadline = getAttemptDeadline(attempt);
+    const maximumRecordedSeconds = deadline
+      ? Math.max(1, Math.floor((deadline.getTime() - new Date(attempt.startedAt).getTime()) / 1000))
+      : elapsedSeconds;
+    const transition = await tx.attempt.updateMany({
+      where: { id: attemptId, userId, status: "IN_PROGRESS" },
+      data: {
+        status: "SUBMITTED",
+        submittedAt,
+        timeSpent: Math.min(elapsedSeconds, maximumRecordedSeconds),
+        totalScore: scoreSummary.totalScore,
+        readingWritingScore: scoreSummary.readingWritingScore,
+        mathScore: scoreSummary.mathScore,
+        listeningScore: scoreSummary.listeningScore,
+      },
+    });
+
+    if (transition.count !== 1) {
+      const currentAttempt = await tx.attempt.findUnique({
+        where: { id: attemptId },
+        include: attemptReviewInclude,
+      });
+      return { updatedAttempt: currentAttempt, previousBestAttempt: null, didSubmit: false };
+    }
+
+    await updateSkillStats(userId, questionResults, tx);
+    const updatedAttempt = await tx.attempt.findUnique({
+      where: { id: attemptId },
+      include: attemptReviewInclude,
+    });
+    return { updatedAttempt, previousBestAttempt, didSubmit: true };
   });
 
-  if (!attempt || attempt.userId !== userId) {
+  const { updatedAttempt, previousBestAttempt, didSubmit } = result;
+  if (!updatedAttempt) {
     throw new ApiError(404, "Attempt not found.");
   }
 
-  if (attempt.status !== "IN_PROGRESS") {
-    return buildAttemptResponse(attempt, true);
+  if (didSubmit) {
+    const sideEffects = [
+      createNotification({
+        userId,
+        type: "TEST_SUBMITTED",
+        title: "Test submitted",
+        message: `${updatedAttempt.exam.title} was submitted with a ${updatedAttempt.totalScore || 0} score.`,
+        metadata: { attemptId: updatedAttempt.id, examId: updatedAttempt.examId },
+      }),
+      evaluateAchievementsForUser(userId, updatedAttempt),
+    ];
+
+    if (
+      previousBestAttempt?.totalScore
+      && (updatedAttempt.totalScore || 0) > previousBestAttempt.totalScore
+    ) {
+      sideEffects.push(createNotification({
+        userId,
+        type: "SCORE_IMPROVED",
+        title: "New best score",
+        message: `You improved from ${previousBestAttempt.totalScore} to ${updatedAttempt.totalScore}.`,
+        metadata: {
+          attemptId: updatedAttempt.id,
+          previousBest: previousBestAttempt.totalScore,
+          newBest: updatedAttempt.totalScore,
+        },
+      }));
+    }
+
+    const sideEffectResults = await Promise.allSettled(sideEffects);
+    sideEffectResults
+      .filter((entry) => entry.status === "rejected")
+      .forEach((entry) => console.warn(
+        "Post-submit side effect failed:",
+        entry.reason?.message || "Unknown side-effect error"
+      ));
   }
-
-  const answersByQuestionId = new Map(
-    attempt.answers.map((answer) => [answer.questionId, answer])
-  );
-
-  const questionResults = getActiveSections(attempt.exam.sections).flatMap((section) =>
-    section.questions.map((question) => {
-      const savedAnswer = answersByQuestionId.get(question.id);
-      const isCorrect = evaluateAnswer(question, savedAnswer?.answer);
-
-      return {
-        sectionId: section.id,
-        question,
-        savedAnswer,
-        isCorrect,
-      };
-    })
-  );
-
-  await Promise.all(
-    questionResults
-      .filter((item) => item.savedAnswer)
-      .map((item) =>
-        prisma.userAnswer.update({
-          where: { id: item.savedAnswer.id },
-          data: { isCorrect: item.isCorrect },
-        })
-      )
-  );
-
-  const scoreSummary = buildScoreSummary(attempt.exam, questionResults);
-  const submittedAt = new Date();
-  const timeSpent = Math.max(
-    1,
-    Math.floor(
-      (submittedAt.getTime() - new Date(attempt.startedAt).getTime()) / 1000
-    )
-  );
-
-  const updatedAttempt = await prisma.attempt.update({
-    where: { id: attemptId },
-    data: {
-      status: "SUBMITTED",
-      submittedAt,
-      timeSpent,
-      totalScore: scoreSummary.totalScore,
-      readingWritingScore: scoreSummary.readingWritingScore,
-      mathScore: scoreSummary.mathScore,
-      listeningScore: scoreSummary.listeningScore,
-    },
-    include: attemptReviewInclude,
-  });
-
-  await updateSkillStats(userId, questionResults);
 
   return buildAttemptResponse(updatedAttempt, true);
 }
@@ -478,41 +645,6 @@ export async function listAttemptsForUser(userId) {
     examId: attempt.examId,
     examTitle: attempt.exam.title,
     examType: attempt.exam.type,
-    status: attempt.status,
-    startedAt: attempt.startedAt,
-    submittedAt: attempt.submittedAt,
-    totalScore: attempt.totalScore,
-    readingWritingScore: attempt.readingWritingScore,
-    mathScore: attempt.mathScore,
-    listeningScore: attempt.listeningScore,
-    timeSpent: attempt.timeSpent,
-    answersCount: attempt.answers.length,
-    hasAiFeedback: Boolean(attempt.aiFeedback),
-  }));
-}
-
-export async function listAllAttemptsForAdmin() {
-  const attempts = await prisma.attempt.findMany({
-    include: {
-      exam: true,
-      user: {
-        select: {
-          fullName: true,
-          email: true,
-        },
-      },
-      aiFeedback: true,
-      answers: true,
-    },
-    orderBy: { startedAt: "desc" },
-  });
-
-  return attempts.map((attempt) => ({
-    id: attempt.id,
-    examId: attempt.examId,
-    examTitle: attempt.exam.title,
-    student: attempt.user.fullName,
-    email: attempt.user.email,
     status: attempt.status,
     startedAt: attempt.startedAt,
     submittedAt: attempt.submittedAt,
@@ -576,6 +708,7 @@ export function buildAttemptSummaryForAI(attemptResponse) {
 
 export function buildAttemptResponse(attempt, includeCorrectAnswers) {
   const exam = sanitizeExam(attempt.exam, true, includeCorrectAnswers);
+  const deadline = getAttemptDeadline(attempt);
 
   return {
     id: attempt.id,
@@ -583,6 +716,8 @@ export function buildAttemptResponse(attempt, includeCorrectAnswers) {
     examId: attempt.examId,
     status: attempt.status,
     startedAt: attempt.startedAt,
+    expiresAt: deadline?.toISOString() || null,
+    serverNow: new Date().toISOString(),
     submittedAt: attempt.submittedAt,
     totalScore: attempt.totalScore,
     readingWritingScore: attempt.readingWritingScore,

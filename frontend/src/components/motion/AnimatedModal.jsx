@@ -1,26 +1,32 @@
-import { useEffect } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { useEffect } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 
-export default function AnimatedModal({ open, children, className = '', labelledBy, onClose }) {
+export default function AnimatedModal({
+  open,
+  children,
+  className = "",
+  labelledBy,
+  onClose,
+}) {
   useEffect(() => {
     if (!open) {
       return undefined;
     }
 
     const originalOverflow = document.body.style.overflow;
-    document.body.style.overflow = 'hidden';
+    document.body.style.overflow = "hidden";
 
     function handleKeyDown(event) {
-      if (event.key === 'Escape' && onClose) {
+      if (event.key === "Escape" && onClose) {
         onClose();
       }
     }
 
-    document.addEventListener('keydown', handleKeyDown);
+    document.addEventListener("keydown", handleKeyDown);
 
     return () => {
       document.body.style.overflow = originalOverflow;
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener("keydown", handleKeyDown);
     };
   }, [onClose, open]);
 
@@ -48,7 +54,7 @@ export default function AnimatedModal({ open, children, className = '', labelled
             initial={{ opacity: 0, y: 18, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
           >
             {children}
           </motion.div>

@@ -1,24 +1,29 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import ExamLayout from '../layouts/ExamLayout.jsx';
-import Loader from '../components/ui/Loader.jsx';
-import Button from '../components/ui/Button.jsx';
-import Modal from '../components/ui/Modal.jsx';
-import ExamHeader from '../components/exam/ExamHeader.jsx';
-import QuestionPalette from '../components/exam/QuestionPalette.jsx';
-import PassagePanel from '../components/exam/PassagePanel.jsx';
-import SectionIntro from '../components/exam/SectionIntro.jsx';
-import SubmitConfirmModal from '../components/exam/SubmitConfirmModal.jsx';
-import FormulaReferenceDialog from '../components/exam/FormulaReferenceDialog.jsx';
-import QuestionRenderer from '../components/question/QuestionRenderer.jsx';
-import EmptyState from '../components/ui/EmptyState.jsx';
-import { getAttempt, saveAnswer, submitAttempt } from '../services/attemptService.js';
-import { generateFeedback } from '../services/aiService.js';
-import { useExamStore } from '../store/examStore.js';
-import { useCountdown } from '../hooks/useCountdown.js';
-import { useExamGuard } from '../hooks/useExamGuard.js';
-import { useAuthStore } from '../store/authStore.js';
-import { getCurrentQuestion } from '../utils/exam.js';
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import ExamLayout from "../layouts/ExamLayout.jsx";
+import Loader from "../components/ui/Loader.jsx";
+import Button from "../components/ui/Button.jsx";
+import Modal from "../components/ui/Modal.jsx";
+import ExamHeader from "../components/exam/ExamHeader.jsx";
+import QuestionPalette from "../components/exam/QuestionPalette.jsx";
+import PassagePanel from "../components/exam/PassagePanel.jsx";
+import SectionIntro from "../components/exam/SectionIntro.jsx";
+import SubmitConfirmModal from "../components/exam/SubmitConfirmModal.jsx";
+import FormulaReferenceDialog from "../components/exam/FormulaReferenceDialog.jsx";
+import CalculatorModal from "../components/exam/renderers/CalculatorModal.jsx";
+import QuestionRenderer from "../components/question/QuestionRenderer.jsx";
+import EmptyState from "../components/ui/EmptyState.jsx";
+import {
+  getAttempt,
+  saveAnswer,
+  submitAttempt,
+} from "../services/attemptService.js";
+import { generateFeedback } from "../services/aiService.js";
+import { useExamStore } from "../store/examStore.js";
+import { useCountdown } from "../hooks/useCountdown.js";
+import { useExamGuard } from "../hooks/useExamGuard.js";
+import { useAuthStore } from "../store/authStore.js";
+import { getCurrentQuestion } from "../utils/exam.js";
 
 function clampSplit(value) {
   return Math.min(68, Math.max(32, value));
@@ -30,7 +35,7 @@ export default function ExamRoomPage() {
   const user = useAuthStore((state) => state.user);
   const [attempt, setAttempt] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState('');
+  const [loadError, setLoadError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -39,12 +44,58 @@ export default function ExamRoomPage() {
   const [notesOpen, setNotesOpen] = useState(false);
   const [lineReaderActive, setLineReaderActive] = useState(false);
   const [activeDialog, setActiveDialog] = useState(null);
+  const [calculatorOpen, setCalculatorOpen] = useState(false);
+  const [expiredAttempt, setExpiredAttempt] = useState(false);
+  const [lineReaderY, setLineReaderY] = useState(() => Math.round(window.innerHeight * 0.48));
   const [splitPercent, setSplitPercent] = useState(52);
   const [transitionSectionIndex, setTransitionSectionIndex] = useState(null);
-  const [completedSectionForTransition, setCompletedSectionForTransition] = useState(null);
-  const [banner, setBanner] = useState('');
+  const [completedSectionForTransition, setCompletedSectionForTransition] =
+    useState(null);
+  const [banner, setBanner] = useState("");
   const advancingRef = useRef(false);
   const bodyRef = useRef(null);
+  const answerSaveQueuesRef = useRef(new Map());
+
+  const queueAnswerSave = useCallback((payload) => {
+    const questionId = payload.questionId;
+    const previousSave = answerSaveQueuesRef.current.get(questionId) || Promise.resolve();
+    const queuedSave = previousSave
+      .catch(() => undefined)
+      .then(async () => {
+        let lastError;
+        for (let attemptNumber = 1; attemptNumber <= 3; attemptNumber += 1) {
+          try {
+            return await saveAnswer(attemptId, payload);
+          } catch (error) {
+            lastError = error;
+            if (error.response?.status === 409 || attemptNumber === 3) {
+              break;
+            }
+            await new Promise((resolve) => window.setTimeout(resolve, attemptNumber * 400));
+          }
+        }
+        throw lastError;
+      })
+      .catch((error) => {
+        setBanner(
+          error.response?.data?.message
+            || "This answer is saved on this device but has not reached the server yet."
+        );
+        return null;
+      });
+
+    answerSaveQueuesRef.current.set(questionId, queuedSave);
+    queuedSave.finally(() => {
+      if (answerSaveQueuesRef.current.get(questionId) === queuedSave) {
+        answerSaveQueuesRef.current.delete(questionId);
+      }
+    });
+    return queuedSave;
+  }, [attemptId]);
+
+  const flushAnswerSaves = useCallback(async () => {
+    await Promise.allSettled([...answerSaveQueuesRef.current.values()]);
+  }, []);
 
   const {
     sessions,
@@ -55,7 +106,7 @@ export default function ExamRoomPage() {
     toggleEliminatedChoice,
     setExamNotes,
     incrementWarning,
-    clearSession
+    clearSession,
   } = useExamStore();
 
   const session = sessions[attemptId];
@@ -63,42 +114,69 @@ export default function ExamRoomPage() {
   useEffect(() => {
     async function loadAttempt() {
       const response = await getAttempt(attemptId);
-      if (response.status !== 'IN_PROGRESS') {
+      if (response.status !== "IN_PROGRESS") {
         navigate(`/attempts/${attemptId}/review`, { replace: true });
         return;
       }
       setAttempt(response);
       initializeSession(attemptId);
+      if (response.expiresAt && new Date(response.expiresAt).getTime() <= Date.now()) {
+        setExpiredAttempt(true);
+      }
       setLoading(false);
     }
 
     loadAttempt().catch((error) => {
-      setLoadError(error.response?.data?.message || 'Exam room could not be loaded. Please return to Practice Exams and try again.');
+      setLoadError(
+        error.response?.data?.message ||
+          "Exam room could not be loaded. Please return to Practice Exams and try again."
+      );
       setLoading(false);
     });
   }, [attemptId, initializeSession, navigate]);
 
   const sections = attempt?.exam.sections || [];
   const currentSection = sections[session?.currentSectionIndex || 0];
-  const currentQuestion = getCurrentQuestion(currentSection, session?.currentQuestionIndex || 0);
-  const showPassagePanel = currentSection?.type === 'reading_writing';
-  const formulaReferenceText = currentSection?.type === 'math'
-    ? currentQuestion?.formulaText?.trim()
-    : '';
+  const currentQuestion = getCurrentQuestion(
+    currentSection,
+    session?.currentQuestionIndex || 0
+  );
+  const showPassagePanel = currentSection?.type === "reading_writing" || currentSection?.type === "math";
+  const formulaReferenceText =
+    currentSection?.type === "math"
+      ? attempt?.exam.referenceText?.trim() || currentQuestion?.formulaText?.trim() || ""
+      : "";
+
+  useEffect(() => {
+    if (!lineReaderActive) return undefined;
+    const moveReader = (event) => setLineReaderY(Math.max(96, Math.min(window.innerHeight - 120, event.clientY)));
+    window.addEventListener("pointermove", moveReader);
+    return () => window.removeEventListener("pointermove", moveReader);
+  }, [lineReaderActive]);
 
   const answerMap = useMemo(() => {
-    const saved = Object.fromEntries((attempt?.answers || []).map((answer) => [answer.questionId, answer.answer]));
+    const saved = Object.fromEntries(
+      (attempt?.answers || []).map((answer) => [
+        answer.questionId,
+        answer.answer,
+      ])
+    );
     return {
       ...saved,
-      ...(session?.draftAnswers || {})
+      ...(session?.draftAnswers || {}),
     };
   }, [attempt?.answers, session?.draftAnswers]);
 
   const reviewFlags = useMemo(() => {
-    const saved = Object.fromEntries((attempt?.answers || []).map((answer) => [answer.questionId, answer.markedForReview]));
+    const saved = Object.fromEntries(
+      (attempt?.answers || []).map((answer) => [
+        answer.questionId,
+        answer.markedForReview,
+      ])
+    );
     return {
       ...saved,
-      ...(session?.reviewFlags || {})
+      ...(session?.reviewFlags || {}),
     };
   }, [attempt?.answers, session?.reviewFlags]);
   const eliminatedValues = currentQuestion
@@ -106,7 +184,8 @@ export default function ExamRoomPage() {
     : [];
   const savedElapsed = session?.elapsedSections?.[currentSection?.id] || 0;
   const currentTarget = currentSection
-    ? (session?.currentSectionStartedAt || Date.now()) + (currentSection.duration * 60 - savedElapsed) * 1000
+    ? (session?.currentSectionStartedAt || Date.now()) +
+      (currentSection.duration * 60 - savedElapsed) * 1000
     : 0;
 
   const handleTimeout = useCallback(async () => {
@@ -117,33 +196,43 @@ export default function ExamRoomPage() {
     advancingRef.current = true;
     const elapsedSeconds = Math.min(
       currentSection.duration * 60,
-      savedElapsed + Math.floor((Date.now() - (session?.currentSectionStartedAt || Date.now())) / 1000)
+      savedElapsed +
+        Math.floor(
+          (Date.now() - (session?.currentSectionStartedAt || Date.now())) / 1000
+        )
     );
 
     updateSession(attemptId, {
       elapsedSections: {
         ...(session?.elapsedSections || {}),
-        [currentSection.id]: elapsedSeconds
-      }
+        [currentSection.id]: elapsedSeconds,
+      },
     });
 
     const nextIndex = (session?.currentSectionIndex || 0) + 1;
     if (nextIndex >= sections.length) {
       setSubmitting(true);
-      const submitted = await submitAttempt(attemptId);
-      setAttempt(submitted);
-      clearSession(attemptId);
-      generateFeedback(attemptId).catch(() => null);
-      navigate(`/attempts/${attemptId}/review`, { replace: true });
+      try {
+        await flushAnswerSaves();
+        const submitted = await submitAttempt(attemptId);
+        setAttempt(submitted);
+        clearSession(attemptId);
+        generateFeedback(attemptId).catch(() => null);
+        navigate(`/attempts/${attemptId}/review`, { replace: true });
+      } catch (error) {
+        setBanner(error.response?.data?.message || "Submit failed. Please try again.");
+        setSubmitting(false);
+        advancingRef.current = false;
+      }
       return;
     }
 
     updateSession(attemptId, {
       currentSectionIndex: nextIndex,
       currentQuestionIndex: 0,
-      currentSectionStartedAt: Date.now()
+      currentSectionStartedAt: Date.now(),
     });
-    setBanner('Time expired. You have been moved to the next section.');
+    setBanner("Time expired. You have been moved to the next section.");
     advancingRef.current = false;
   }, [
     attempt,
@@ -156,34 +245,39 @@ export default function ExamRoomPage() {
     session?.currentSectionIndex,
     session?.currentSectionStartedAt,
     session?.elapsedSections,
-    updateSession
+    updateSession,
+    flushAnswerSaves,
   ]);
 
   const remainingSeconds = useCountdown(currentTarget, handleTimeout);
 
   useExamGuard(Boolean(attempt), () => {
     incrementWarning(attemptId);
-    setBanner('Tab switch detected. Stay focused on the exam window.');
+    setBanner("Tab switch detected. Stay focused on the exam window.");
   });
 
-  async function persistAnswer(questionId, answer, markedForReview = reviewFlags[questionId] || false) {
+  async function persistAnswer(
+    questionId,
+    answer,
+    markedForReview = reviewFlags[questionId] || false
+  ) {
     saveDraftAnswer(attemptId, questionId, answer);
-    await saveAnswer(attemptId, {
+    await queueAnswerSave({
       questionId,
       answer,
-      markedForReview
-    }).catch(() => null);
+      markedForReview,
+    });
   }
 
   async function handleMarkForReview() {
     const currentValue = reviewFlags[currentQuestion.id] || false;
     const nextValue = !currentValue;
     setReviewFlag(attemptId, currentQuestion.id, nextValue);
-    await saveAnswer(attemptId, {
+    await queueAnswerSave({
       questionId: currentQuestion.id,
       answer: answerMap[currentQuestion.id] || {},
-      markedForReview: nextValue
-    }).catch(() => null);
+      markedForReview: nextValue,
+    });
   }
 
   function handleToggleEliminated(label) {
@@ -210,31 +304,34 @@ export default function ExamRoomPage() {
 
     const handleMove = (moveEvent) => resizeExamPanels(moveEvent.clientX);
     const handleUp = () => {
-      window.removeEventListener('pointermove', handleMove);
+      window.removeEventListener("pointermove", handleMove);
     };
 
-    window.addEventListener('pointermove', handleMove);
-    window.addEventListener('pointerup', handleUp, { once: true });
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp, { once: true });
   }
 
   function handlePanelResizeKeyDown(event) {
-    if (!['ArrowLeft', 'ArrowRight'].includes(event.key)) {
+    if (!["ArrowLeft", "ArrowRight"].includes(event.key)) {
       return;
     }
 
     event.preventDefault();
-    setSplitPercent((value) => clampSplit(value + (event.key === 'ArrowRight' ? 3 : -3)));
+    setSplitPercent((value) =>
+      clampSplit(value + (event.key === "ArrowRight" ? 3 : -3))
+    );
   }
 
   function handleMenuAction(action) {
     setMoreOpen(false);
 
-    if (action === 'line-reader') {
+    if (action === "line-reader") {
       const nextValue = !lineReaderActive;
       setLineReaderActive(nextValue);
-      setBanner(nextValue
-        ? 'Line reader is active. Use it to track one row at a time.'
-        : 'Line reader turned off.'
+      setBanner(
+        nextValue
+          ? "Line reader is active. Use it to track one row at a time."
+          : "Line reader turned off."
       );
       return;
     }
@@ -244,69 +341,77 @@ export default function ExamRoomPage() {
 
   function getDialogCopy() {
     const answeredCount = currentSection.questions.filter((question) =>
-      Boolean(answerMap[question.id]?.value || answerMap[question.id]?.values?.length)
+      Boolean(
+        answerMap[question.id]?.value || answerMap[question.id]?.values?.length
+      )
     ).length;
-    const reviewCount = currentSection.questions.filter((question) => reviewFlags[question.id]).length;
+    const reviewCount = currentSection.questions.filter(
+      (question) => reviewFlags[question.id]
+    ).length;
     const dialogs = {
       directions: {
         title: `${currentSection.title} directions`,
         body: [
           `Answer every question in this section. This module is timed for ${currentSection.duration} minutes.`,
-          'Use Previous and Next to move between questions. Use the question selector to jump directly to any item.',
-          'Mark for Review keeps a flag on the current question so you can return before submitting the section.'
+          "Use Previous and Next to move between questions. Use the question selector to jump directly to any item.",
+          "Mark for Review keeps a flag on the current question so you can return before submitting the section.",
         ],
-        action: 'Got it'
+        action: "Got it",
       },
       help: {
-        title: 'Exam help',
+        title: "Exam help",
         body: [
-          'Your work is saved automatically after every answer change.',
-          'If a section timer reaches zero, the exam advances to the next section or submits the final section.',
-          'Copy, paste, and page refresh are blocked during the exam to protect the test session.'
+          "Your work is saved automatically after every answer change.",
+          "If a section timer reaches zero, the exam advances to the next section or submits the final section.",
+          "Copy, paste, and page refresh are blocked during the exam to protect the test session.",
         ],
-        action: 'Close'
+        action: "Close",
       },
       shortcuts: {
-        title: 'Keyboard shortcuts',
+        title: "Keyboard shortcuts",
         body: [
-          'Use Tab to move through controls and Enter or Space to activate the focused control.',
-          'Use the question selector at the bottom to jump between questions without losing saved answers.',
-          'Clipboard shortcuts are disabled in exam mode.'
+          "Left / Right Arrow: move between questions.",
+          "Alt + N: Notes. Alt + C: calculator in Math. Alt + R: Reference in Math.",
+          "Escape closes the open exam tool. Tab and Enter remain available for keyboard navigation.",
         ],
-        action: 'Close'
+        action: "Close",
       },
       assistive: {
-        title: 'Assistive technology',
+        title: "Assistive technology",
         body: [
-          'All core exam controls are keyboard reachable and expose button states where applicable.',
-          'Audio questions use native audio controls. The line reader can be turned on from the More menu.',
-          'Timer visibility can be toggled without stopping the timer.'
+          "All core exam controls are keyboard reachable and expose button states where applicable.",
+          "Audio questions use native audio controls. The line reader can be turned on from the More menu.",
+          "Timer visibility can be toggled without stopping the timer.",
         ],
-        action: 'Close'
+        action: "Close",
       },
       break: {
-        title: 'Unscheduled break',
+        title: "Unscheduled break",
         body: [
-          'You can step away, but the section timer continues to run.',
-          'Keep this page open. Returning to another tab may trigger a focus warning.',
-          'Press Continue when you are ready to resume.'
+          "You can step away, but the section timer continues to run.",
+          "Keep this page open. Returning to another tab may trigger a focus warning.",
+          "Press Continue when you are ready to resume.",
         ],
-        action: 'Continue'
+        action: "Continue",
       },
       review: {
-        title: 'Section review',
+        title: "Section review",
         body: [
           `${answeredCount} of ${currentSection.questions.length} questions have an answer saved.`,
-          `${reviewCount} question${reviewCount === 1 ? '' : 's'} marked for review.`,
-          'Open the question selector again to jump directly to any unanswered or flagged item.'
+          `${reviewCount} question${
+            reviewCount === 1 ? "" : "s"
+          } marked for review.`,
+          "Open the question selector again to jump directly to any unanswered or flagged item.",
         ],
-        action: 'Return to questions'
+        action: "Return to questions",
       },
       formula: {
-        title: 'Formula Reference',
-        referenceText: formulaReferenceText || 'No formula reference has been added for this item.',
-        action: 'Close'
-      }
+        title: "Formula Reference",
+        referenceText:
+          formulaReferenceText ||
+          "No formula reference has been added for this item.",
+        action: "Close",
+      },
     };
 
     return dialogs[activeDialog];
@@ -324,6 +429,71 @@ export default function ExamRoomPage() {
   function selectQuestion(index) {
     updateSession(attemptId, { currentQuestionIndex: index });
     setPaletteOpen(false);
+  }
+
+  useEffect(() => {
+    function handleExamShortcut(event) {
+      const target = event.target;
+      if (target?.matches?.("input, textarea, [contenteditable='true']")) return;
+
+      if (event.key === "Escape") {
+        setActiveDialog(null);
+        setMoreOpen(false);
+        setPaletteOpen(false);
+        setNotesOpen(false);
+        setCalculatorOpen(false);
+        return;
+      }
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        moveQuestion(-1);
+        return;
+      }
+      if (event.key === "ArrowRight") {
+        event.preventDefault();
+        moveQuestion(1);
+        return;
+      }
+      if (!event.altKey) return;
+      const key = event.key.toLowerCase();
+      if (key === "n") {
+        event.preventDefault();
+        setNotesOpen((value) => !value);
+      } else if (key === "c" && currentSection?.type === "math") {
+        event.preventDefault();
+        setCalculatorOpen((value) => !value);
+      } else if (key === "r" && currentSection?.type === "math") {
+        event.preventDefault();
+        setActiveDialog((value) => value === "formula" ? null : "formula");
+      }
+    }
+
+    window.addEventListener("keydown", handleExamShortcut);
+    return () => window.removeEventListener("keydown", handleExamShortcut);
+  }, [currentSection?.type, session?.currentQuestionIndex]);
+
+  async function submitExpiredAttempt() {
+    if (submitting) return;
+    setSubmitting(true);
+    setBanner("");
+    try {
+      await flushAnswerSaves();
+      await submitAttempt(attemptId);
+      clearSession(attemptId);
+      navigate(`/attempts/${attemptId}/review`, { replace: true });
+    } catch (error) {
+      if (error.response?.status === 400 || error.response?.status === 409) {
+        const current = await getAttempt(attemptId).catch(() => null);
+        if (current?.status && current.status !== "IN_PROGRESS") {
+          clearSession(attemptId);
+          navigate(`/attempts/${attemptId}/review`, { replace: true });
+          return;
+        }
+      }
+      setBanner(error.response?.data?.message || "Saved answers could not be submitted yet. Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleNext() {
@@ -347,15 +517,18 @@ export default function ExamRoomPage() {
 
     const elapsedSeconds = Math.min(
       currentSection.duration * 60,
-      savedElapsed + Math.floor((Date.now() - (session?.currentSectionStartedAt || Date.now())) / 1000)
+      savedElapsed +
+        Math.floor(
+          (Date.now() - (session?.currentSectionStartedAt || Date.now())) / 1000
+        )
     );
 
     const nextIndex = (session?.currentSectionIndex || 0) + 1;
     updateSession(attemptId, {
       elapsedSections: {
         ...(session?.elapsedSections || {}),
-        [currentSection.id]: elapsedSeconds
-      }
+        [currentSection.id]: elapsedSeconds,
+      },
     });
 
     setModalOpen(false);
@@ -363,13 +536,14 @@ export default function ExamRoomPage() {
     if (nextIndex >= sections.length) {
       setSubmitting(true);
       try {
+        await flushAnswerSaves();
         const submitted = await submitAttempt(attemptId);
         setAttempt(submitted);
         clearSession(attemptId);
         generateFeedback(attemptId).catch(() => null);
         navigate(`/attempts/${attemptId}/review`, { replace: true });
-      } catch (_error) {
-        setBanner('Submit failed. Please check your connection and try again.');
+      } catch (error) {
+        setBanner(error.response?.data?.message || "Submit failed. Please check your connection and try again.");
       } finally {
         setSubmitting(false);
       }
@@ -383,15 +557,40 @@ export default function ExamRoomPage() {
     return <Loader label="Launching exam room..." />;
   }
 
-  if (loadError || !attempt || !session || !currentSection || !currentQuestion) {
+  if (
+    loadError ||
+    !attempt ||
+    !session ||
+    !currentSection ||
+    !currentQuestion
+  ) {
     return (
       <ExamLayout>
         <EmptyState
           title="Exam room unavailable"
-          message={loadError || 'This attempt could not be opened.'}
+          message={loadError || "This attempt could not be opened."}
           actionLabel="Back to practice"
           actionTo="/practice"
         />
+      </ExamLayout>
+    );
+  }
+
+  if (expiredAttempt) {
+    return (
+      <ExamLayout>
+        <main className="expired-attempt-screen">
+          <section className="expired-attempt-panel">
+            <span className="expired-eyebrow">Time limit reached</span>
+            <h1>Your exam time has ended</h1>
+            <p>The exam room is locked, but every answer that reached the server is preserved. Submit them now to build your score report and review.</p>
+            {banner ? <div className="exam-banner">{banner}</div> : null}
+            <div className="expired-attempt-actions">
+              <Button onClick={submitExpiredAttempt} disabled={submitting}>{submitting ? "Submitting saved answers..." : "Submit saved answers"}</Button>
+              <Button variant="ghost" onClick={() => navigate("/practice")}>Back to practice</Button>
+            </div>
+          </section>
+        </main>
       </ExamLayout>
     );
   }
@@ -404,11 +603,22 @@ export default function ExamRoomPage() {
           completedSection={completedSectionForTransition}
           answers={answerMap}
           reviewFlags={reviewFlags}
+          onReviewQuestion={(questionIndex) => {
+            const completedIndex = sections.findIndex((item) => item.id === completedSectionForTransition?.id);
+            if (completedIndex < 0) return;
+            updateSession(attemptId, {
+              currentSectionIndex: completedIndex,
+              currentQuestionIndex: questionIndex,
+              currentSectionStartedAt: Date.now(),
+            });
+            setTransitionSectionIndex(null);
+            setCompletedSectionForTransition(null);
+          }}
           onContinue={() => {
             updateSession(attemptId, {
               currentSectionIndex: transitionSectionIndex,
               currentQuestionIndex: 0,
-              currentSectionStartedAt: Date.now()
+              currentSectionStartedAt: Date.now(),
             });
             setTransitionSectionIndex(null);
             setCompletedSectionForTransition(null);
@@ -421,7 +631,7 @@ export default function ExamRoomPage() {
   const dialog = getDialogCopy();
 
   return (
-    <ExamLayout className={lineReaderActive ? 'line-reader-active' : ''}>
+    <ExamLayout className={lineReaderActive ? "line-reader-active" : ""}>
       <ExamHeader
         sectionTitle={currentSection.title}
         remainingSeconds={remainingSeconds}
@@ -429,13 +639,16 @@ export default function ExamRoomPage() {
         onToggleTimer={() => setTimerHidden((value) => !value)}
         moreOpen={moreOpen}
         onToggleMore={() => setMoreOpen((value) => !value)}
-        onShowDirections={() => setActiveDialog('directions')}
-        showFormulaTool={currentSection.type === 'math'}
-        formulaOpen={activeDialog === 'formula'}
+        onShowDirections={() => setActiveDialog("directions")}
+        showCalculatorTool={currentSection.type === "math"}
+        calculatorOpen={calculatorOpen}
+        onOpenCalculator={() => setCalculatorOpen(true)}
+        showFormulaTool={currentSection.type === "math"}
+        formulaOpen={activeDialog === "formula"}
         onOpenFormula={() => {
           setMoreOpen(false);
           setNotesOpen(false);
-          setActiveDialog('formula');
+          setActiveDialog("formula");
         }}
         onOpenNotes={() => setNotesOpen((value) => !value)}
         notesOpen={notesOpen}
@@ -447,15 +660,19 @@ export default function ExamRoomPage() {
       <div className="test-preview-banner">THIS IS A TEST PREVIEW</div>
       {banner ? <div className="exam-banner">{banner}</div> : null}
       {lineReaderActive && !modalOpen && !activeDialog ? (
-        <div className="line-reader-strip" aria-hidden="true" />
+        <div className="line-reader-strip" style={{ top: `${lineReaderY}px` }} aria-hidden="true" />
       ) : null}
 
       <div
         ref={bodyRef}
-        className={`bluebook-body section-${currentSection.type} ${showPassagePanel ? '' : 'single-panel'}`.trim()}
-        style={{ '--passage-width': `${splitPercent}%` }}
+        className={`bluebook-body section-${currentSection.type} ${
+          showPassagePanel ? "" : "single-panel"
+        }`.trim()}
+        style={{ "--passage-width": `${splitPercent}%` }}
       >
-        {showPassagePanel ? <PassagePanel question={currentQuestion} attemptId={attemptId} /> : null}
+        {showPassagePanel ? (
+          <PassagePanel question={currentQuestion} attemptId={attemptId} sectionType={currentSection.type} />
+        ) : null}
         {showPassagePanel ? (
           <div
             className="panel-resizer"
@@ -494,10 +711,12 @@ export default function ExamRoomPage() {
               <strong>Highlights & Notes</strong>
               <span>Saved on this device during the attempt.</span>
             </div>
-            <button type="button" onClick={() => setNotesOpen(false)}>Close</button>
+            <button type="button" onClick={() => setNotesOpen(false)}>
+              Close
+            </button>
           </div>
           <textarea
-            value={session.notes || ''}
+            value={session.notes || ""}
             onChange={(event) => setExamNotes(attemptId, event.target.value)}
             placeholder="Write quick scratch notes here..."
           />
@@ -505,14 +724,15 @@ export default function ExamRoomPage() {
       ) : null}
 
       <footer className="exam-bottom-nav">
-        <strong>{user?.fullName || 'Student'}</strong>
+        <strong>{user?.fullName || "Student"}</strong>
         <div className="palette-anchor">
           <button
             type="button"
             className="question-selector-button"
             onClick={() => setPaletteOpen((value) => !value)}
           >
-            Question {session.currentQuestionIndex + 1} of {currentSection.questions.length} <span>^</span>
+            Question {session.currentQuestionIndex + 1} of{" "}
+            {currentSection.questions.length} <span>^</span>
           </button>
           <QuestionPalette
             open={paletteOpen}
@@ -523,7 +743,7 @@ export default function ExamRoomPage() {
             onSelect={selectQuestion}
             onReview={() => {
               setPaletteOpen(false);
-              setActiveDialog('review');
+              setActiveDialog("review");
             }}
           />
         </div>
@@ -537,43 +757,58 @@ export default function ExamRoomPage() {
             Previous
           </button>
           <button type="button" className="next-button" onClick={handleNext}>
-            {submitting ? 'Submitting...'
-              : session.currentQuestionIndex === currentSection.questions.length - 1
-              ? (session.currentSectionIndex === sections.length - 1 ? 'Submit' : 'Next Section')
-              : 'Next'}
+            {submitting
+              ? "Submitting..."
+              : session.currentQuestionIndex ===
+                currentSection.questions.length - 1
+              ? session.currentSectionIndex === sections.length - 1
+                ? "Submit"
+                : "Next Section"
+              : "Next"}
           </button>
         </div>
       </footer>
 
       <SubmitConfirmModal
         open={modalOpen}
-        title={session.currentSectionIndex === sections.length - 1 ? 'Submit exam?' : 'Submit section?'}
+        title={
+          session.currentSectionIndex === sections.length - 1
+            ? "Submit exam?"
+            : "Submit section?"
+        }
         message={
           session.currentSectionIndex === sections.length - 1
-            ? 'This will end the exam, calculate your score, and move you to review.'
-            : 'You will move to the next timed section once you confirm.'
+            ? "This will end the exam, calculate your score, and move you to review."
+            : "You will move to the next timed section once you confirm."
         }
         onCancel={() => setModalOpen(false)}
         onConfirm={advanceSection}
-        confirmLabel={session.currentSectionIndex === sections.length - 1 ? 'Submit exam' : 'Continue'}
+        confirmLabel={
+          session.currentSectionIndex === sections.length - 1
+            ? "Submit exam"
+            : "Continue"
+        }
         pending={submitting}
       />
       <FormulaReferenceDialog
-        open={activeDialog === 'formula'}
+        open={activeDialog === "formula"}
         text={formulaReferenceText}
         onClose={() => setActiveDialog(null)}
       />
+      <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
       <Modal
-        open={Boolean(dialog) && activeDialog !== 'formula'}
+        open={Boolean(dialog) && activeDialog !== "formula"}
         title={dialog?.title}
         actions={
-          <Button onClick={() => {
-            if (activeDialog === 'break') {
-              setBanner('Break closed. Timer continued while you were away.');
-            }
-            setActiveDialog(null);
-          }}>
-            {dialog?.action || 'Close'}
+          <Button
+            onClick={() => {
+              if (activeDialog === "break") {
+                setBanner("Break closed. Timer continued while you were away.");
+              }
+              setActiveDialog(null);
+            }}
+          >
+            {dialog?.action || "Close"}
           </Button>
         }
       >
@@ -590,11 +825,11 @@ export default function ExamRoomPage() {
         )}
       </Modal>
       <SubmitConfirmModal
-        open={activeDialog === 'exit'}
+        open={activeDialog === "exit"}
         title="Exit the exam?"
         message="Your saved answers will remain in this attempt. You can resume from the Attempts page."
         onCancel={() => setActiveDialog(null)}
-        onConfirm={() => navigate('/attempts')}
+        onConfirm={() => navigate("/attempts")}
         confirmLabel="Exit exam"
       />
       {submitting ? (

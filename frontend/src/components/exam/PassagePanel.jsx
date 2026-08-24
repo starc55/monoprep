@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import PassageAssetViewer from './PassageAssetViewer.jsx';
 
 const colors = [
   { id: 'yellow', label: 'Yellow', value: '#fff3a3' },
@@ -36,7 +37,7 @@ function findHighlight(highlights, wordIndex) {
   return highlights.find((item) => wordIndex >= item.start && wordIndex <= item.end);
 }
 
-export default function PassagePanel({ question, attemptId }) {
+export default function PassagePanel({ question, attemptId, sectionType }) {
   const [collapsed, setCollapsed] = useState(false);
   const panelRef = useRef(null);
   const storageKey = getStorageKey(attemptId, question?.passage?.id);
@@ -123,6 +124,25 @@ export default function PassagePanel({ question, attemptId }) {
   }
 
   if (!question?.passage) {
+    if (sectionType === 'math') {
+      return (
+        <aside className="passage-panel math-directions-panel" aria-label="Math test directions">
+          <span className="passage-category">SAT Math</span>
+          <h2>Directions</h2>
+          <p>Use the information in the question to determine the best answer.</p>
+          <ul>
+            <li>For multiple-choice questions, select one answer choice.</li>
+            <li>For student-produced responses, enter an integer, decimal, or fraction as requested.</li>
+            <li>You may use the Desmos calculator and the shared reference sheet when they are available.</li>
+            <li>Your answer is saved automatically when you move to another question.</li>
+          </ul>
+          <div className="math-answer-format-note">
+            <strong>Accepted response formats</strong>
+            <span>3.5 &nbsp; 3/2 &nbsp; -0.75</span>
+          </div>
+        </aside>
+      );
+    }
     return (
       <div className="passage-panel empty">
         <h2>Stimulus</h2>
@@ -143,22 +163,25 @@ export default function PassagePanel({ question, attemptId }) {
         </button>
       </div>
       <div className="passage-content highlightable-passage" ref={panelRef} onMouseUp={handleMouseUp}>
-        <p>
-          {tokens.map(({ token, key, wordIndex, isSpace }) => {
-            if (isSpace) return token;
-            const highlight = findHighlight(highlights, wordIndex);
-            return (
-              <span
-                key={key}
-                data-word-index={wordIndex}
-                className={highlight ? 'highlighted-token' : ''}
-                style={highlight ? { backgroundColor: highlight.color } : undefined}
-              >
-                {token}
-              </span>
-            );
-          })}
-        </p>
+        {question.passage.content ? (
+          <p>
+            {tokens.map(({ token, key, wordIndex, isSpace }) => {
+              if (isSpace) return token;
+              const highlight = findHighlight(highlights, wordIndex);
+              return (
+                <span
+                  key={key}
+                  data-word-index={wordIndex}
+                  className={highlight ? 'highlighted-token' : ''}
+                  style={highlight ? { backgroundColor: highlight.color } : undefined}
+                >
+                  {token}
+                </span>
+              );
+            })}
+          </p>
+        ) : null}
+        <PassageAssetViewer passage={question.passage} />
       </div>
       {selectionRange ? (
         <div className="highlight-toolbar">

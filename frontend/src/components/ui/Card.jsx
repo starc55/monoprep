@@ -1,6 +1,12 @@
-import AnimatedCard from '../motion/AnimatedCard.jsx';
+import AnimatedCard from "../motion/AnimatedCard.jsx";
 
-export default function Card({ title, eyebrow, children, className = '', ...props }) {
+export default function Card({
+  title,
+  eyebrow,
+  children,
+  className = "",
+  ...props
+}) {
   return (
     <AnimatedCard className={`card ${className}`.trim()} {...props}>
       {eyebrow ? <span className="card-eyebrow">{eyebrow}</span> : null}

@@ -1,5 +1,6 @@
 import QuestionOptions from './QuestionOptions.jsx';
 import TextInputQuestion from '../../question/TextInputQuestion.jsx';
+import MathJaxContent from '../../math/MathJaxContent.jsx';
 
 export default function ReadingQuestionRenderer({
   question,
@@ -12,7 +13,7 @@ export default function ReadingQuestionRenderer({
 
   return (
     <div className="question-body reading-question-body">
-      <h3>{question.questionText}</h3>
+      <h3><MathJaxContent>{question.questionText}</MathJaxContent></h3>
       {isTextInput ? (
         <TextInputQuestion value={value} onChange={onChange} />
       ) : (

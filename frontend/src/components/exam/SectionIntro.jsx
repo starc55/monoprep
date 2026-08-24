@@ -13,6 +13,7 @@ export default function SectionIntro({
   answers = {},
   reviewFlags = {},
   onContinue,
+  onReviewQuestion,
   isFinal = false
 }) {
   const [mode, setMode] = useState(completedSection ? 'summary' : 'intro');
@@ -57,19 +58,35 @@ export default function SectionIntro({
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;
     const context = new AudioContext();
-    const gain = context.createGain();
-    const low = context.createOscillator();
-    const high = context.createOscillator();
-    low.type = 'sine';
-    high.type = 'triangle';
-    low.frequency.value = 196;
-    high.frequency.value = 392;
-    gain.gain.value = 0.018;
-    low.connect(gain);
-    high.connect(gain);
-    gain.connect(context.destination);
-    low.start();
-    high.start();
+    const master = context.createGain();
+    const rainFilter = context.createBiquadFilter();
+    const rainGain = context.createGain();
+    const swell = context.createOscillator();
+    const swellDepth = context.createGain();
+    const noiseBuffer = context.createBuffer(1, context.sampleRate * 3, context.sampleRate);
+    const noise = noiseBuffer.getChannelData(0);
+    for (let index = 0; index < noise.length; index += 1) {
+      noise[index] = (Math.random() * 2 - 1) * (0.68 + Math.random() * 0.32);
+    }
+    const rain = context.createBufferSource();
+    rain.buffer = noiseBuffer;
+    rain.loop = true;
+    rainFilter.type = 'lowpass';
+    rainFilter.frequency.value = 1450;
+    rainFilter.Q.value = 0.4;
+    rainGain.gain.value = 0.055;
+    master.gain.value = 0.72;
+    swell.type = 'sine';
+    swell.frequency.value = 0.09;
+    swellDepth.gain.value = 0.018;
+    swell.connect(swellDepth);
+    swellDepth.connect(rainGain.gain);
+    rain.connect(rainFilter);
+    rainFilter.connect(rainGain);
+    rainGain.connect(master);
+    master.connect(context.destination);
+    rain.start();
+    swell.start();
     audioRef.current = context;
     setMusicOn(true);
   }
@@ -84,8 +101,8 @@ export default function SectionIntro({
           <Button onClick={onContinue}>Resume Exam</Button>
           <button type="button" className="relaxing-music-button" onClick={toggleMusic}>
             {musicOn ? <VolumeX aria-hidden="true" /> : <Play aria-hidden="true" />}
-            <span>Relaxing Music</span>
-            <small>{musicOn ? 'Playing soft focus tone' : 'Lo-fi Chill'}</small>
+            <span>Nature Soundscape</span>
+            <small>{musicOn ? 'Soft rain is playing' : 'Rain and distant wind'}</small>
           </button>
           <span>You can resume the test at any point. Use this time to rest your eyes and mind.</span>
         </section>
@@ -100,7 +117,7 @@ export default function SectionIntro({
           <div>
             <h1>Module Complete!</h1>
             <p>{completedSection.title}</p>
-            <span>Review your answers before moving forward.</span>
+            <span>Review answered, flagged, and unanswered items before moving forward.</span>
           </div>
           <div className="questions-answered-badge">
             <strong>{stats.answered}/{stats.total}</strong>
@@ -122,12 +139,15 @@ export default function SectionIntro({
             </div>
             <div className="module-question-grid">
               {completedSection.questions.map((question, index) => (
-                <span
+                <button
+                  type="button"
                   key={question.id}
                   className={`${hasAnswer(answers[question.id]) ? 'answered' : ''} ${reviewFlags[question.id] ? 'flagged' : ''}`.trim()}
+                  onClick={() => onReviewQuestion?.(index)}
+                  aria-label={`Review question ${index + 1}`}
                 >
                   {index + 1}
-                </span>
+                </button>
               ))}
             </div>
             <div className="module-legend">

@@ -1,6 +1,6 @@
-import ListeningQuestionRenderer from '../exam/renderers/ListeningQuestionRenderer.jsx';
-import MathQuestionRenderer from '../exam/renderers/MathQuestionRenderer.jsx';
-import ReadingQuestionRenderer from '../exam/renderers/ReadingQuestionRenderer.jsx';
+import ListeningQuestionRenderer from "../exam/renderers/ListeningQuestionRenderer.jsx";
+import MathQuestionRenderer from "../exam/renderers/MathQuestionRenderer.jsx";
+import ReadingQuestionRenderer from "../exam/renderers/ReadingQuestionRenderer.jsx";
 
 export default function QuestionRenderer({
   section,
@@ -12,34 +12,42 @@ export default function QuestionRenderer({
   onMarkForReview,
   eliminatedValues = [],
   onToggleEliminated,
-  preview = false
+  preview = false,
 }) {
   const rendererProps = {
     question,
     value,
     onChange,
     eliminatedValues,
-    onToggleEliminated
+    onToggleEliminated,
   };
 
   function renderQuestion() {
-    if (section?.type === 'reading_writing') {
+    if (section?.type === "reading_writing") {
       return <ReadingQuestionRenderer {...rendererProps} />;
     }
-    if (section?.type === 'math') {
+    if (section?.type === "math") {
       return <MathQuestionRenderer {...rendererProps} />;
     }
-    if (section?.type === 'listening' || question.type === 'audio_question') {
+    if (section?.type === "listening" || question.type === "audio_question") {
       return <ListeningQuestionRenderer {...rendererProps} />;
     }
-    if (question.formulaText || question.imageUrl || question.type === 'text_input') {
+    if (
+      question.formulaText ||
+      question.imageUrl ||
+      question.type === "text_input"
+    ) {
       return <MathQuestionRenderer {...rendererProps} />;
     }
     return <ReadingQuestionRenderer {...rendererProps} />;
   }
 
   return (
-    <div className={`question-panel ${preview ? 'question-panel-preview' : ''}`.trim()}>
+    <div
+      className={`question-panel ${
+        preview ? "question-panel-preview" : ""
+      }`.trim()}
+    >
       <div className="question-panel-head">
         <span className="question-number">{questionNumber}</span>
         {preview ? (
@@ -47,11 +55,11 @@ export default function QuestionRenderer({
         ) : (
           <button
             type="button"
-            className={`mark-review ${markedForReview ? 'active' : ''}`.trim()}
+            className={`mark-review ${markedForReview ? "active" : ""}`.trim()}
             onClick={onMarkForReview}
           >
             <span aria-hidden="true">Flag</span>
-            {markedForReview ? 'Marked for Review' : 'Mark for Review'}
+            {markedForReview ? "Marked for Review" : "Mark for Review"}
           </button>
         )}
       </div>

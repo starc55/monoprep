@@ -1,57 +1,124 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import {
-  BarChart3,
-  BookOpen,
-  CalendarDays,
-  ChevronDown,
-  ChevronLeft,
-  ChevronRight,
-  ClipboardList,
-  Flame,
-  GraduationCap,
-  Headphones,
-  LayoutDashboard,
-  LogOut,
-  Menu,
-  MessageSquareText,
-  Swords,
-  Settings,
-  UserRound,
-  X
-} from 'lucide-react';
-import { useAuthStore } from '../store/authStore.js';
-import PageTransition from '../components/motion/PageTransition.jsx';
+import { useEffect, useState } from "react";
+import { motion } from "framer-motion";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { ChevronDown, ChevronLeft, ChevronRight, Menu, X } from "lucide-react";
+import { useAuthStore } from "../store/authStore.js";
+import PageTransition from "../components/motion/PageTransition.jsx";
+import NotificationBell from "../components/notifications/NotificationBell.jsx";
+import DashboardArt from "../components/dashboard/DashboardArt.jsx";
+import LordIcon from "../components/ui/LordIcon.jsx";
+import SupportWidget from "../components/support/SupportWidget.jsx";
+import { dashboardAssets } from "../data/dashboardAssets.js";
+import LanguageSwitcher from "../components/ui/LanguageSwitcher.jsx";
+import { useI18n } from "../i18n/I18nProvider.jsx";
+
+const sidebarIconMap = {
+  dashboard: "https://cdn.lordicon.com/vvkusrbh.json",
+  practice: "https://cdn.lordicon.com/hmpomorl.json",
+  questionHub: "https://cdn.lordicon.com/fttvwdlw.json",
+  desmos: "https://cdn.lordicon.com/abfverha.json",
+  vocabulary: "https://cdn.lordicon.com/weqkkuwt.json",
+  analytics: "https://cdn.lordicon.com/oqhqyeud.json",
+  competition: "https://cdn.lordicon.com/lvrxlmju.json",
+  community: "https://cdn.lordicon.com/gznfrpfp.json",
+  leaderboard: "https://cdn.lordicon.com/vttzorhw.json",
+  profile: "https://cdn.lordicon.com/kdduutaw.json",
+  settings: "https://cdn.lordicon.com/nfuackpv.json",
+  logout: "https://cdn.lordicon.com/vfiwitrm.json",
+};
 
 const studentNavigation = [
-  { to: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/practice', label: 'Practice Exams', icon: ClipboardList },
-  { to: '/question-hub', label: 'Question Hub', icon: BookOpen },
-  { to: '/vocabulary', label: 'Vocabulary', icon: MessageSquareText },
-  { to: '/analytics', label: 'Analytics / Results', icon: BarChart3 },
-  { to: '/competition', label: 'Competition Panel', icon: Flame },
   {
-    to: '/support-sessions',
-    label: 'Support Sessions',
-    icon: Swords,
-    children: [
-      { to: '/support-sessions/schedules', label: 'Schedules', icon: CalendarDays },
-      { to: '/support-sessions/mentors', label: 'Mentors', icon: UserRound }
-    ]
+    to: "/dashboard",
+    label: "Dashboard",
+    labelKey: "nav.dashboard",
+    icon: "dashboard",
   },
-  { to: '/support', label: 'Support', icon: Headphones },
-  { to: '/profile', label: 'Profile', icon: UserRound },
-  { to: '/settings', label: 'Settings', icon: Settings }
+  {
+    to: "/practice",
+    label: "Practice Exams",
+    labelKey: "nav.practice",
+    icon: "practice",
+  },
+  {
+    to: "/question-hub",
+    label: "Question Hub",
+    labelKey: "nav.questionHub",
+    icon: "questionHub",
+  },
+  {
+    to: "/desmos-hack",
+    label: "Desmos Hack",
+    labelKey: "nav.desmos",
+    icon: "desmos",
+  },
+  {
+    to: "/vocabulary",
+    label: "Vocabulary",
+    labelKey: "nav.vocabulary",
+    icon: "vocabulary",
+  },
+  {
+    to: "/analytics",
+    label: "Analytics / Results",
+    labelKey: "nav.analytics",
+    icon: "analytics",
+  },
+  {
+    to: "/competition",
+    label: "Competition",
+    labelKey: "nav.competition",
+    icon: "competition",
+  },
+  {
+    to: "/students",
+    key: "community",
+    label: "Community",
+    labelKey: "nav.community",
+    icon: "community",
+    children: [
+      {
+        to: "/students",
+        label: "Students",
+        labelKey: "nav.students",
+        icon: "community",
+      },
+      {
+        to: "/leaderboard",
+        label: "Leaderboard",
+        labelKey: "nav.leaderboard",
+        icon: "leaderboard",
+      },
+    ],
+  },
+  {
+    to: "/profile",
+    label: "Profile",
+    labelKey: "nav.profile",
+    icon: "profile",
+  },
 ];
 
-function getInitials(name = '') {
-  return name
-    .split(' ')
-    .slice(0, 2)
-    .map((item) => item.charAt(0))
-    .join('')
-    .toUpperCase() || 'MP';
+function getInitials(name = "") {
+  return (
+    name
+      .split(" ")
+      .slice(0, 2)
+      .map((item) => item.charAt(0))
+      .join("")
+      .toUpperCase() || "MP"
+  );
+}
+
+function SidebarIcon({ name, size = 24 }) {
+  return (
+    <LordIcon
+      src={sidebarIconMap[name] || sidebarIconMap.dashboard}
+      size={size}
+      className="sidebar-lord-icon"
+      colors="primary:#dbeafe,secondary:#60a5fa"
+    />
+  );
 }
 
 export default function AppLayout({ title, subtitle, actions, children }) {
@@ -61,17 +128,27 @@ export default function AppLayout({ title, subtitle, actions, children }) {
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
-    () => window.localStorage.getItem('monoprep-sidebar-collapsed') === 'true'
+    () => window.localStorage.getItem("monoprep-sidebar-collapsed") === "true"
   );
-  const [supportOpen, setSupportOpen] = useState(() => location.pathname.startsWith('/support-sessions'));
+  const [openGroups, setOpenGroups] = useState(() => ({
+    community:
+      location.pathname.startsWith("/students") ||
+      location.pathname.startsWith("/leaderboard"),
+  }));
+  const navigationItems = studentNavigation;
+  const { t, literal } = useI18n();
+  const examRoomRoute = /^\/attempts\/[^/]+\/exam\/?$/.test(location.pathname);
 
   useEffect(() => {
-    window.localStorage.setItem('monoprep-sidebar-collapsed', String(sidebarCollapsed));
+    window.localStorage.setItem(
+      "monoprep-sidebar-collapsed",
+      String(sidebarCollapsed)
+    );
   }, [sidebarCollapsed]);
 
   async function handleLogout() {
     await logout();
-    navigate('/login');
+    navigate("/login");
   }
 
   function handleNavClick() {
@@ -79,7 +156,11 @@ export default function AppLayout({ title, subtitle, actions, children }) {
   }
 
   return (
-    <div className={`app-shell student-shell ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`.trim()}>
+    <div
+      className={`app-shell student-shell ${
+        sidebarCollapsed ? "sidebar-collapsed" : ""
+      }`.trim()}
+    >
       {!sidebarOpen ? (
         <button
           type="button"
@@ -100,11 +181,14 @@ export default function AppLayout({ title, subtitle, actions, children }) {
         />
       ) : null}
       <motion.aside
-        className={`app-sidebar premium-sidebar student-sidebar ${sidebarOpen ? 'open' : ''} ${sidebarCollapsed ? 'collapsed' : ''}`.trim()}
+        className={`app-sidebar premium-sidebar student-sidebar ${
+          sidebarOpen ? "open" : ""
+        } ${sidebarCollapsed ? "collapsed" : ""}`.trim()}
         initial={false}
         animate={{ width: sidebarCollapsed ? 96 : 284 }}
-        transition={{ duration: 0.22, ease: 'easeOut' }}
+        transition={{ duration: 0.22, ease: "easeOut" }}
       >
+        <DashboardArt src={dashboardAssets.mono} className="sidebar-art" />
         <div className="sidebar-top">
           <div className="sidebar-brand-lockup">
             <img src="/monoprep-logo.png" alt="MonoPrep logo" />
@@ -115,99 +199,148 @@ export default function AppLayout({ title, subtitle, actions, children }) {
             <button
               type="button"
               className="collapse-control"
-              aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+              aria-label={
+                sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"
+              }
               onClick={() => setSidebarCollapsed((value) => !value)}
             >
               {sidebarCollapsed ? <ChevronRight /> : <ChevronLeft />}
             </button>
           </div>
-          <p className="sidebar-copy">Focused practice, scoring, review, and analytics.</p>
+          <p className="sidebar-copy">
+            Focused practice, scoring, review, and analytics.
+          </p>
         </div>
         <nav className="sidebar-nav" aria-label="Student navigation">
-          <span className="sidebar-section-label">Menu</span>
-          <span className="sidebar-corner-orbit" aria-hidden="true"><GraduationCap /></span>
-          {studentNavigation.map(({ to, label, icon: Icon, children: childItems }) => {
-            const isGroupActive = childItems?.some((item) => location.pathname.startsWith(item.to)) || location.pathname === to;
+          <span className="sidebar-section-label">{t("nav.menu")}</span>
+          {navigationItems.map(
+            ({ to, key, label, labelKey, icon, children: childItems }) => {
+              const displayLabel = labelKey ? t(labelKey) : label;
+              const groupKey = key || to;
+              const isGroupActive =
+                childItems?.some((item) =>
+                  location.pathname.startsWith(item.to)
+                ) || location.pathname === to;
+              const groupOpen = Boolean(openGroups[groupKey]);
 
-            if (childItems?.length) {
-              return (
-                <div key={to} className={`sidebar-nav-group ${supportOpen ? 'open' : ''}`.trim()}>
-                  <button
-                    type="button"
-                    className={`sidebar-link sidebar-group-toggle ${isGroupActive ? 'active' : ''}`.trim()}
-                    onClick={() => setSupportOpen((value) => !value)}
-                    aria-expanded={supportOpen}
-                    aria-label={sidebarCollapsed ? label : undefined}
-                    data-tooltip={sidebarCollapsed ? label : undefined}
+              if (childItems?.length) {
+                return (
+                  <div
+                    key={to}
+                    className={`sidebar-nav-group ${
+                      groupOpen ? "open" : ""
+                    }`.trim()}
                   >
-                    <Icon aria-hidden="true" />
-                    <span className="sidebar-label">{label}</span>
-                    <ChevronDown aria-hidden="true" className="sidebar-group-caret" />
-                  </button>
-                  <div className="sidebar-subnav">
-                    {childItems.map(({ to: childTo, label: childLabel, icon: ChildIcon }) => (
-                      <NavLink
-                        key={childTo}
-                        to={childTo}
-                        onClick={handleNavClick}
-                        aria-label={sidebarCollapsed ? childLabel : undefined}
-                        data-tooltip={sidebarCollapsed ? childLabel : undefined}
-                      >
-                        <ChildIcon aria-hidden="true" />
-                        <span className="sidebar-label">{childLabel}</span>
-                      </NavLink>
-                    ))}
+                    <button
+                      type="button"
+                      className={`sidebar-link sidebar-group-toggle ${
+                        isGroupActive ? "active" : ""
+                      }`.trim()}
+                      onClick={() =>
+                        setOpenGroups((current) => ({
+                          ...current,
+                          [groupKey]: !current[groupKey],
+                        }))
+                      }
+                      aria-expanded={groupOpen}
+                      aria-label={sidebarCollapsed ? displayLabel : undefined}
+                      data-tooltip={sidebarCollapsed ? displayLabel : undefined}
+                    >
+                      <SidebarIcon name={icon} />
+                      <span className="sidebar-label">{displayLabel}</span>
+                      <ChevronDown
+                        aria-hidden="true"
+                        className="sidebar-group-caret"
+                      />
+                    </button>
+                    <div className="sidebar-subnav">
+                      {childItems.map(
+                        ({
+                          to: childTo,
+                          label: childLabel,
+                          labelKey: childLabelKey,
+                          icon: childIcon,
+                        }) => (
+                          <NavLink
+                            key={childTo}
+                            to={childTo}
+                            onClick={handleNavClick}
+                            aria-label={
+                              sidebarCollapsed
+                                ? childLabelKey
+                                  ? t(childLabelKey)
+                                  : childLabel
+                                : undefined
+                            }
+                            data-tooltip={
+                              sidebarCollapsed
+                                ? childLabelKey
+                                  ? t(childLabelKey)
+                                  : childLabel
+                                : undefined
+                            }
+                          >
+                            <SidebarIcon name={childIcon} size={22} />
+                            <span className="sidebar-label">
+                              {childLabelKey ? t(childLabelKey) : childLabel}
+                            </span>
+                          </NavLink>
+                        )
+                      )}
+                    </div>
                   </div>
-                </div>
+                );
+              }
+
+              return (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={handleNavClick}
+                  aria-label={sidebarCollapsed ? displayLabel : undefined}
+                  data-tooltip={sidebarCollapsed ? displayLabel : undefined}
+                >
+                  <SidebarIcon name={icon} />
+                  <span className="sidebar-label">{displayLabel}</span>
+                </NavLink>
               );
             }
-
-            return (
-              <NavLink
-                key={to}
-                to={to}
-                onClick={handleNavClick}
-                aria-label={sidebarCollapsed ? label : undefined}
-                data-tooltip={sidebarCollapsed ? label : undefined}
-              >
-                <Icon aria-hidden="true" />
-                <span className="sidebar-label">{label}</span>
-              </NavLink>
-            );
-          })}
-          <button
-            type="button"
-            className="sidebar-link"
-            onClick={handleLogout}
-            aria-label={sidebarCollapsed ? 'Logout' : undefined}
-            data-tooltip={sidebarCollapsed ? 'Logout' : undefined}
-          >
-            <LogOut aria-hidden="true" />
-            <span className="sidebar-label">Logout</span>
-          </button>
+          )}
         </nav>
         <div className="sidebar-user">
           <div className="sidebar-user-row">
             <span className="sidebar-avatar">
-              {user?.avatarUrl ? <img src={user.avatarUrl} alt="" /> : getInitials(user?.fullName)}
+              {user?.avatarUrl ? (
+                <img src={user.avatarUrl} alt="" />
+              ) : (
+                getInitials(user?.fullName)
+              )}
             </span>
             <div className="sidebar-user-copy">
-              <strong>{user?.fullName || 'MonoPrep Student'}</strong>
-              <span>{user?.username ? `@${user.username}` : user?.email || 'Signed-in account'}</span>
+              <strong>{user?.fullName || "MonoPrep Student"}</strong>
+              <span>
+                {user?.username
+                  ? `@${user.username}`
+                  : user?.email || "Signed-in account"}
+              </span>
             </div>
-            <NavLink className="sidebar-settings" to="/settings" aria-label="Open settings">
-              <Settings aria-hidden="true" />
+            <NavLink
+              className="sidebar-settings"
+              to="/settings"
+              aria-label="Open settings"
+            >
+              <SidebarIcon name="settings" size={22} />
             </NavLink>
           </div>
           <button
             type="button"
             className="sidebar-logout"
             onClick={handleLogout}
-            aria-label={sidebarCollapsed ? 'Sign out' : undefined}
-            data-tooltip={sidebarCollapsed ? 'Sign out' : undefined}
+            aria-label={sidebarCollapsed ? "Sign out" : undefined}
+            data-tooltip={sidebarCollapsed ? "Sign out" : undefined}
           >
-            <LogOut aria-hidden="true" />
-            <span>Sign out</span>
+            <SidebarIcon name="logout" size={22} />
+            <span>{t("nav.signOut")}</span>
           </button>
         </div>
         <button
@@ -223,14 +356,19 @@ export default function AppLayout({ title, subtitle, actions, children }) {
         <PageTransition>
           <header className="page-header">
             <div>
-              <h1>{title}</h1>
-              {subtitle ? <p>{subtitle}</p> : null}
+              <h1>{literal(title)}</h1>
+              {subtitle ? <p>{literal(subtitle)}</p> : null}
             </div>
-            <div className="page-actions">{actions}</div>
+            <div className="page-actions">
+              <NotificationBell />
+              {!examRoomRoute ? <LanguageSwitcher /> : null}
+              {actions}
+            </div>
           </header>
           {children}
         </PageTransition>
       </main>
+      <SupportWidget />
     </div>
   );
 }

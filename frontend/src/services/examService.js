@@ -72,6 +72,20 @@ export async function uploadQuestionImage(file) {
   return data.url;
 }
 
+export async function uploadPassageFile(file) {
+  const body = new FormData();
+  body.append('file', file);
+  const { data } = await api.post('/uploads/passage-files', body);
+  return data;
+}
+
+export async function uploadTeacherImage(file) {
+  const body = new FormData();
+  body.append('image', file);
+  const { data } = await api.post('/uploads/teacher-images', body);
+  return data.url;
+}
+
 export async function getQuestions() {
   const { data } = await api.get('/questions');
   return data.questions;

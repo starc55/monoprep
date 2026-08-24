@@ -3,6 +3,7 @@ import TextInputQuestion from '../../question/TextInputQuestion.jsx';
 import QuestionOptions from './QuestionOptions.jsx';
 import QuestionImage from './QuestionImage.jsx';
 import CalculatorModal from './CalculatorModal.jsx';
+import MathJaxContent from '../../math/MathJaxContent.jsx';
 
 function DataTable({ data }) {
   if (!data?.headers?.length || !Array.isArray(data.rows)) {
@@ -46,7 +47,7 @@ export default function MathQuestionRenderer({
           </button>
         ) : null}
       </div>
-      <h3>{question.questionText}</h3>
+      <h3><MathJaxContent>{question.questionText}</MathJaxContent></h3>
       <QuestionImage src={question.imageUrl} alt="Graph or reference image for this math question" />
       <DataTable data={question.tableData} />
       {isTextInput ? (

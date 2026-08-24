@@ -24,20 +24,46 @@ import AppLayout from '../layouts/AppLayout.jsx';
 import Button from '../components/ui/Button.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Loader from '../components/ui/Loader.jsx';
+import PremiumSelect from '../components/ui/PremiumSelect.jsx';
 import FormulaReferenceDialog from '../components/exam/FormulaReferenceDialog.jsx';
 import CalculatorModal from '../components/exam/renderers/CalculatorModal.jsx';
-import { getQuestionBankItems } from '../services/questionBankService.js';
+import MathJaxContent from '../components/math/MathJaxContent.jsx';
+import {
+  getQuestionBankItems,
+  getQuestionHubProgress,
+  saveQuestionHubProgress
+} from '../services/questionBankService.js';
+import { useAuthStore } from '../store/authStore.js';
 
-function readResults() {
+function resultStorageKey(user) {
+  return `monoprep-qhub-results:${user?.id || user?.authUserId || user?.email || 'guest'}`;
+}
+
+function readResults(user) {
   try {
-    return JSON.parse(localStorage.getItem('monoprep-qhub-results') || '{}');
+    return JSON.parse(localStorage.getItem(resultStorageKey(user)) || '{}');
   } catch (_error) {
     return {};
   }
 }
 
-function writeResults(results) {
-  localStorage.setItem('monoprep-qhub-results', JSON.stringify(results));
+function writeResults(user, results) {
+  localStorage.setItem(resultStorageKey(user), JSON.stringify(results));
+}
+
+function mapProgress(rows = []) {
+  return rows.reduce((acc, row) => {
+    acc[row.questionKey] = {
+      answer: row.answer,
+      answered: row.answered,
+      correct: row.correct,
+      marked: row.marked,
+      attempts: row.attempts,
+      timeSpent: row.timeSpent,
+      updatedAt: row.updatedAt
+    };
+    return acc;
+  }, {});
 }
 
 function formatDifficulty(value = '') {
@@ -98,6 +124,7 @@ function groupBy(items, key) {
 }
 
 export default function QuestionHubPage() {
+  const user = useAuthStore((state) => state.user);
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [loadError, setLoadError] = useState('');
@@ -111,7 +138,7 @@ export default function QuestionHubPage() {
   const [markedFilter, setMarkedFilter] = useState('ALL');
   const [bluebookFilter, setBluebookFilter] = useState('INCLUDED');
   const [expanded, setExpanded] = useState(() => new Set(['Math', 'Reading & Writing']));
-  const [results, setResults] = useState(readResults);
+  const [results, setResults] = useState(() => readResults(user));
   const [activeSession, setActiveSession] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [feedback, setFeedback] = useState(null);
@@ -124,14 +151,34 @@ export default function QuestionHubPage() {
   const [elapsed, setElapsed] = useState(0);
 
   useEffect(() => {
-    getQuestionBankItems()
-      .then((rows) => setItems(rows))
-      .catch((error) => {
-        setLoadError(error?.response?.data?.message || 'Question Hub could not be loaded.');
-        setItems([]);
+    let active = true;
+    setLoading(true);
+    setLoadError('');
+
+    Promise.allSettled([getQuestionBankItems(), getQuestionHubProgress()])
+      .then(([itemsResult, progressResult]) => {
+        if (!active) return;
+        if (itemsResult.status === 'fulfilled') {
+          setItems(itemsResult.value);
+        } else {
+          setLoadError(itemsResult.reason?.response?.data?.message || 'Question Hub could not be loaded.');
+          setItems([]);
+        }
+
+        const nextResults = progressResult.status === 'fulfilled'
+          ? mapProgress(progressResult.value)
+          : readResults(user);
+        setResults(nextResults);
+        writeResults(user, nextResults);
       })
-      .finally(() => setLoading(false));
-  }, []);
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
 
   useEffect(() => {
     if (!activeSession) return undefined;
@@ -143,9 +190,11 @@ export default function QuestionHubPage() {
   }, [activeSession]);
 
   const availableDomains = useMemo(() => {
-    const sourceItems = sourceMode === 'PRACTICE_TESTS'
-      ? items.filter((item) => item.source === 'practice_exam')
-      : items;
+    const sourceItems = items.filter((item) => (
+      sourceMode === 'PRACTICE_TESTS'
+        ? item.source === 'practice_exam'
+        : item.source !== 'practice_exam'
+    ));
     const subjects = subject === 'ALL' ? sourceItems : sourceItems.filter((item) => item.subject === subject);
     return groupBy(subjects, 'domain');
   }, [items, sourceMode, subject]);
@@ -155,7 +204,9 @@ export default function QuestionHubPage() {
       const saved = results[item.id];
       const haystack = `${item.subject} ${item.domain} ${item.skill} ${item.prompt}`.toLowerCase();
       const matchesQuery = haystack.includes(query.toLowerCase());
-      const matchesSource = sourceMode === 'COLLEGE_BOARD' || item.source === 'practice_exam';
+      const matchesSource = sourceMode === 'PRACTICE_TESTS'
+        ? item.source === 'practice_exam'
+        : item.source !== 'practice_exam';
       const matchesSubject = subject === 'ALL' || item.subject === subject;
       const matchesDomain = !selectedDomains.length || selectedDomains.includes(item.domain);
       const matchesDifficulty = difficulty === 'ALL' || item.difficulty === difficulty;
@@ -231,7 +282,8 @@ export default function QuestionHubPage() {
 
   function beginExamSession(sessionItems = filteredItems, title = 'Question Bank Session') {
     if (!sessionItems.length) return;
-    setActiveSession({ title, items: sessionItems, index: 0, startedAt: Date.now() });
+    const startedAt = Date.now();
+    setActiveSession({ title, items: sessionItems, index: 0, startedAt, questionStartedAt: startedAt });
     setStage('exam');
     setSelectedAnswer(results[sessionItems[0].id]?.answer || '');
     setFeedback(null);
@@ -242,6 +294,7 @@ export default function QuestionHubPage() {
 
   function commitResult(item, answer) {
     const correct = isCorrect(item, answer);
+    const timeSpent = Math.max(1, Math.floor((Date.now() - (activeSession?.questionStartedAt || Date.now())) / 1000));
     const nextAttempts = {
       ...attemptCounts,
       [item.id]: (attemptCounts[item.id] || 0) + 1
@@ -254,12 +307,14 @@ export default function QuestionHubPage() {
         answer,
         correct,
         attempts: nextAttempts[item.id],
+        timeSpent: (results[item.id]?.timeSpent || 0) + timeSpent,
         updatedAt: new Date().toISOString()
       }
     };
     setAttemptCounts(nextAttempts);
     setResults(next);
-    writeResults(next);
+    writeResults(user, next);
+    saveQuestionHubProgress({ questionKey: item.id, ...next[item.id] }).catch(() => {});
     setFeedback(correct ? 'correct' : 'incorrect');
   }
 
@@ -272,7 +327,8 @@ export default function QuestionHubPage() {
       }
     };
     setResults(next);
-    writeResults(next);
+    writeResults(user, next);
+    saveQuestionHubProgress({ questionKey: item.id, ...next[item.id] }).catch(() => {});
   }
 
   function toggleEliminated(label) {
@@ -291,7 +347,7 @@ export default function QuestionHubPage() {
   function goToQuestion(index) {
     if (!activeSession || !activeSession.items[index]) return;
     const nextItem = activeSession.items[index];
-    setActiveSession({ ...activeSession, index });
+    setActiveSession({ ...activeSession, index, questionStartedAt: Date.now() });
     setSelectedAnswer(results[nextItem.id]?.answer || '');
     setFeedback(null);
     setEliminateMode(false);
@@ -395,8 +451,10 @@ export default function QuestionHubPage() {
                 <b>Attempts <small>{attemptCounts[activeItem.id] || results[activeItem.id]?.attempts || 0}</small></b>
               </div>
 
-              {activeItem.formulaText ? <p className="qhub-formula">{activeItem.formulaText}</p> : null}
-              <h2>{activeItem.prompt}</h2>
+              {activeItem.formulaText ? (
+                <MathJaxContent block className="qhub-formula">{activeItem.formulaText}</MathJaxContent>
+              ) : null}
+              <h2><MathJaxContent>{activeItem.prompt}</MathJaxContent></h2>
               {activeItem.imageUrl ? <img className="qhub-question-image" src={activeItem.imageUrl} alt="" /> : null}
 
               {activeChoices.length ? (
@@ -420,7 +478,7 @@ export default function QuestionHubPage() {
                         }}
                       >
                         <b>{choice.label}</b>
-                        <span>{choice.text}</span>
+                        <MathJaxContent>{choice.text}</MathJaxContent>
                         {choice.imageUrl ? <img src={choice.imageUrl} alt="" /> : null}
                         {isEliminated ? <X aria-hidden="true" /> : null}
                       </button>
@@ -444,7 +502,9 @@ export default function QuestionHubPage() {
               {feedback ? (
                 <div className={`qhub-feedback ${feedback === 'correct' ? 'correct' : 'incorrect'}`}>
                   <strong>{feedback === 'correct' ? 'Correct' : `Correct answer: ${getCorrectAnswer(activeItem) || getAcceptedAnswers(activeItem).join(', ')}`}</strong>
-                  {activeItem.explanation ? <p>{activeItem.explanation}</p> : null}
+                  {activeItem.explanation ? (
+                    <MathJaxContent block>{activeItem.explanation}</MathJaxContent>
+                  ) : null}
                 </div>
               ) : null}
             </article>
@@ -459,11 +519,16 @@ export default function QuestionHubPage() {
               <Check aria-hidden="true" />
               Progress: {activeSession.items.filter((item) => results[item.id]?.answered).length} of {activeSession.items.length} questions checked
             </div>
-            <select value={activeSession.index} onChange={(event) => goToQuestion(Number(event.target.value))}>
-              {activeSession.items.map((item, index) => (
-                <option key={item.id} value={index}>Question {index + 1} of {activeSession.items.length}</option>
-              ))}
-            </select>
+            <PremiumSelect
+              ariaLabel="Jump to question"
+              value={String(activeSession.index)}
+              onChange={(value) => goToQuestion(Number(value))}
+              options={activeSession.items.map((item, index) => ({
+                value: String(index),
+                label: `Question ${index + 1} of ${activeSession.items.length}`
+              }))}
+              className="qhub-question-select"
+            />
             <Button disabled={!selectedAnswer} onClick={() => commitResult(activeItem, selectedAnswer)}>
               <Check aria-hidden="true" />
               Check
@@ -502,7 +567,7 @@ export default function QuestionHubPage() {
             </article>
             <article>
               <span>Time Elapsed</span>
-              <strong>00:00</strong>
+              <strong>{formatTime(filteredItems.reduce((sum, item) => sum + (results[item.id]?.timeSpent || 0), 0))}</strong>
             </article>
             <article className="compact">
               <span>Session Progress</span>
@@ -547,10 +612,10 @@ export default function QuestionHubPage() {
             <p>Select filters to build a personalized practice test from available question bank and practice exam questions.</p>
           </div>
           <div className="qhub-tabs" role="tablist" aria-label="Question source">
-            <button type="button" className={sourceMode === 'COLLEGE_BOARD' ? 'active' : ''} onClick={() => setSourceMode('COLLEGE_BOARD')}>
+            <button type="button" className={sourceMode === 'COLLEGE_BOARD' ? 'active' : ''} onClick={() => { setSourceMode('COLLEGE_BOARD'); setSelectedDomains([]); }}>
               <BookOpen aria-hidden="true" /> College Board
             </button>
-            <button type="button" className={sourceMode === 'PRACTICE_TESTS' ? 'active' : ''} onClick={() => setSourceMode('PRACTICE_TESTS')}>
+            <button type="button" className={sourceMode === 'PRACTICE_TESTS' ? 'active' : ''} onClick={() => { setSourceMode('PRACTICE_TESTS'); setSelectedDomains([]); }}>
               <FileText aria-hidden="true" /> Practice Tests
             </button>
           </div>

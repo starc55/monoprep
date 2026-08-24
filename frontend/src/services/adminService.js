@@ -5,12 +5,12 @@ export async function getUsers() {
   return data.users;
 }
 
+export async function updateUserPremiumAccess(userId, premiumUntil) {
+  const { data } = await api.patch(`/admin/users/${userId}/premium`, { premiumUntil });
+  return data.user;
+}
+
 export async function getStats() {
   const { data } = await api.get('/admin/stats');
   return data.stats;
-}
-
-export async function getAttempts() {
-  const { data } = await api.get('/admin/attempts');
-  return data.attempts;
 }

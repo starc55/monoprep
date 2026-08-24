@@ -35,6 +35,15 @@ function ToolIcon({ name }) {
     );
   }
 
+  if (name === 'calculator') {
+    return (
+      <svg {...commonProps}>
+        <rect x="5" y="3" width="14" height="18" rx="2" />
+        <path d="M8 7h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01" />
+      </svg>
+    );
+  }
+
   if (name === 'help') {
     return (
       <svg {...commonProps}>
@@ -112,6 +121,9 @@ export default function ExamHeader({
   moreOpen,
   onToggleMore,
   onShowDirections,
+  showCalculatorTool,
+  calculatorOpen,
+  onOpenCalculator,
   showFormulaTool,
   formulaOpen,
   onOpenFormula,
@@ -146,6 +158,18 @@ export default function ExamHeader({
       </div>
 
       <div className="bluebook-tools">
+        {showCalculatorTool ? (
+          <button
+            type="button"
+            className={`tool-button icon-tool ${calculatorOpen ? 'active' : ''}`.trim()}
+            aria-label="Open Desmos calculator"
+            title="Open Desmos calculator"
+            aria-pressed={calculatorOpen}
+            onClick={onOpenCalculator}
+          >
+            <ToolIcon name="calculator" />
+          </button>
+        ) : null}
         {showFormulaTool ? (
           <button
             type="button"

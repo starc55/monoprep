@@ -1,9 +1,92 @@
-import bcrypt from 'bcrypt';
+import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
+import { createClient } from '@supabase/supabase-js';
+import { defaultAchievements } from '../constants/achievements.js';
 
 const prisma = new PrismaClient();
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseServiceRoleKey) {
+  throw new Error('SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are required for seeding.');
+}
+
+const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
+
+async function deleteAuthUserByEmail(email) {
+  const { data, error } = await supabaseAdmin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000
+  });
+  if (error) throw error;
+
+  const existingUser = data.users.find((user) => user.email?.toLowerCase() === email.toLowerCase());
+  if (existingUser) {
+    const { error: deleteError } = await supabaseAdmin.auth.admin.deleteUser(existingUser.id);
+    if (deleteError) throw deleteError;
+  }
+}
+
+async function createSeedUser({ fullName, email, password, role }) {
+  const {
+    data: { user: authUser },
+    error
+  } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+    user_metadata: { full_name: fullName }
+  });
+  if (error || !authUser) {
+    throw error || new Error(`Could not create seed auth user: ${email}`);
+  }
+
+  return prisma.user.upsert({
+    where: { email },
+    update: {
+      authUserId: authUser.id,
+      fullName,
+      role,
+      status: 'ACTIVE',
+      passwordHash: null
+    },
+    create: {
+      id: authUser.id,
+      authUserId: authUser.id,
+      fullName,
+      email,
+      role,
+      status: 'ACTIVE'
+    }
+  });
+}
 
 async function main() {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('The destructive seed script cannot run in production.');
+  }
+  if (process.env.SEED_ALLOW_RESET !== 'true') {
+    throw new Error('Set SEED_ALLOW_RESET=true to confirm the destructive local seed reset.');
+  }
+
+  const adminPassword = process.env.SEED_ADMIN_PASSWORD;
+  const studentPassword = process.env.SEED_STUDENT_PASSWORD;
+  if (!adminPassword || adminPassword.length < 12 || !studentPassword || studentPassword.length < 12) {
+    throw new Error('SEED_ADMIN_PASSWORD and SEED_STUDENT_PASSWORD must each contain at least 12 characters.');
+  }
+
+  await deleteAuthUserByEmail('admin@satai.com');
+  await deleteAuthUserByEmail('student@satai.com');
+
+  await prisma.userAchievement.deleteMany();
+  await prisma.achievement.deleteMany();
+  await prisma.notification.deleteMany();
+  await prisma.follow.deleteMany();
   await prisma.aIFeedback.deleteMany();
   await prisma.userAnswer.deleteMany();
   await prisma.attempt.deleteMany();
@@ -14,26 +97,29 @@ async function main() {
   await prisma.exam.deleteMany();
   await prisma.user.deleteMany();
 
-  const adminPasswordHash = await bcrypt.hash('Admin123!', 10);
-  const studentPasswordHash = await bcrypt.hash('Student123!', 10);
-
-  const admin = await prisma.user.create({
-    data: {
-      fullName: 'Admin User',
-      email: 'admin@satai.com',
-      passwordHash: adminPasswordHash,
-      role: 'ADMIN'
-    }
+  const admin = await createSeedUser({
+    fullName: 'Admin User',
+    email: 'admin@satai.com',
+    password: adminPassword,
+    role: 'ADMIN'
   });
 
-  const student = await prisma.user.create({
-    data: {
-      fullName: 'Student Demo',
-      email: 'student@satai.com',
-      passwordHash: studentPasswordHash,
-      role: 'STUDENT'
-    }
+  const student = await createSeedUser({
+    fullName: 'Student Demo',
+    email: 'student@satai.com',
+    password: studentPassword,
+    role: 'STUDENT'
   });
+
+  await Promise.all(
+    defaultAchievements.map((achievement) =>
+      prisma.achievement.upsert({
+        where: { code: achievement.code },
+        update: achievement,
+        create: achievement
+      })
+    )
+  );
 
   const exam = await prisma.exam.create({
     data: {
@@ -41,6 +127,7 @@ async function main() {
       description:
         'A realistic multi-section SAT-style practice exam with reading, writing, math, and listening-style items.',
       type: 'FULL_LENGTH',
+      accessType: 'FREE',
       totalDuration: 87,
       isPublished: true
     }
@@ -422,8 +509,8 @@ async function main() {
   });
 
   console.log('Seed complete.');
-  console.log(`Admin: ${admin.email} / Admin123!`);
-  console.log(`Student: ${student.email} / Student123!`);
+  console.log(`Admin account created: ${admin.email}`);
+  console.log(`Student account created: ${student.email}`);
 }
 
 main()

@@ -1,15 +1,16 @@
 import { useRef, useState } from 'react';
 import { Grip, Maximize2, X } from 'lucide-react';
+import MathJaxContent from '../math/MathJaxContent.jsx';
 
 const defaultReferences = [
-  ['Circle', 'A = pi r^2', 'C = 2 pi r'],
-  ['Rectangle', 'A = lw', ''],
-  ['Triangle', 'A = 1/2 bh', ''],
-  ['Right triangle', 'a^2 + b^2 = c^2', ''],
-  ['Cylinder', 'V = pi r^2 h', ''],
-  ['Sphere', 'V = 4/3 pi r^3', ''],
-  ['Cone', 'V = 1/3 pi r^2 h', ''],
-  ['Pyramid', 'V = 1/3 lwh', '']
+  ['Circle', '\\(A=\\pi r^2\\)', '\\(C=2\\pi r\\)'],
+  ['Rectangle', '\\(A=lw\\)', ''],
+  ['Triangle', '\\(A=\\frac{1}{2}bh\\)', ''],
+  ['Right triangle', '\\(a^2+b^2=c^2\\)', ''],
+  ['Cylinder', '\\(V=\\pi r^2h\\)', ''],
+  ['Sphere', '\\(V=\\frac{4}{3}\\pi r^3\\)', ''],
+  ['Cone', '\\(V=\\frac{1}{3}\\pi r^2h\\)', ''],
+  ['Pyramid', '\\(V=\\frac{1}{3}lwh\\)', '']
 ];
 
 export default function FormulaReferenceDialog({ open, text, onClose }) {
@@ -59,15 +60,15 @@ export default function FormulaReferenceDialog({ open, text, onClose }) {
       </header>
       <div className="formula-window-body">
         {text ? (
-          <p className="formula-custom-text">{text}</p>
+          <MathJaxContent block className="formula-custom-text">{text}</MathJaxContent>
         ) : (
           <div className="formula-reference-grid">
             {defaultReferences.map(([title, first, second]) => (
               <article key={title}>
                 <div className="formula-shape" aria-hidden="true" />
                 <strong>{title}</strong>
-                <span>{first}</span>
-                {second ? <span>{second}</span> : null}
+                <MathJaxContent>{first}</MathJaxContent>
+                {second ? <MathJaxContent>{second}</MathJaxContent> : null}
               </article>
             ))}
           </div>

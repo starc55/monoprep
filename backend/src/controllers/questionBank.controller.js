@@ -133,7 +133,8 @@ export async function listQuestionBankItems(req, res) {
     prisma.exam.findMany({
       where: {
         isPublished: true,
-        type: { not: 'FULL_LENGTH' }
+        contentMode: 'QUESTION_HUB',
+        ...(req.user?.role === 'ADMIN' ? {} : { accessType: 'FREE' }),
       },
       orderBy: { createdAt: 'desc' },
       include: {
@@ -160,6 +161,39 @@ export async function listQuestionBankItems(req, res) {
   const items = [...adminItems, ...examItems].filter((item) => matchesFilters(item, req.query));
 
   res.json({ items });
+}
+
+export async function listQuestionHubProgress(req, res) {
+  const progress = await prisma.questionHubProgress.findMany({
+    where: { userId: req.user.id },
+    orderBy: { updatedAt: 'desc' }
+  });
+
+  res.json({ progress });
+}
+
+export async function upsertQuestionHubProgress(req, res) {
+  const { questionKey, answer, ...progressFields } = req.body;
+  const data = {
+    ...progressFields,
+    ...(answer !== undefined ? { answer } : {})
+  };
+  const progress = await prisma.questionHubProgress.upsert({
+    where: {
+      userId_questionKey: {
+        userId: req.user.id,
+        questionKey
+      }
+    },
+    create: {
+      userId: req.user.id,
+      questionKey,
+      ...data
+    },
+    update: data
+  });
+
+  res.json({ progress });
 }
 
 export async function createQuestionBankItem(req, res) {

@@ -1,72 +1,33 @@
-import bcrypt from 'bcrypt';
 import { prisma } from '../config/prisma.js';
-import { signToken } from '../utils/jwt.js';
 
 function serializeUser(user) {
   return {
     id: user.id,
+    authUserId: user.authUserId,
     fullName: user.fullName,
     email: user.email,
     username: user.username,
     avatarUrl: user.avatarUrl,
-    role: user.role
+    role: user.role,
+    status: user.status,
+    premiumUntil: user.premiumUntil,
+    hasPremiumAccess: Boolean(user.premiumUntil && new Date(user.premiumUntil) > new Date()),
+    teacherApprovalStatus: user.teacherProfile?.status || null,
+    teacherSubject: user.teacherProfile?.subject || null
   };
 }
 
-export async function register(req, res) {
-  const { fullName, email, password } = req.body;
-
-  const existingUser = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() }
-  });
-
-  if (existingUser) {
-    return res.status(409).json({ message: 'Email is already registered.' });
-  }
-
-  const passwordHash = await bcrypt.hash(password, 10);
-  const user = await prisma.user.create({
-    data: {
-      fullName,
-      email: email.toLowerCase(),
-      passwordHash
+const authUserInclude = {
+  teacherProfile: {
+    select: {
+      status: true,
+      subject: true
     }
-  });
-
-  const token = signToken(user.id);
-
-  res.status(201).json({
-    token,
-    user: serializeUser(user)
-  });
-}
-
-export async function login(req, res) {
-  const { email, password } = req.body;
-
-  const user = await prisma.user.findUnique({
-    where: { email: email.toLowerCase() }
-  });
-
-  if (!user) {
-    return res.status(401).json({ message: 'Invalid credentials.' });
   }
-
-  const isValid = await bcrypt.compare(password, user.passwordHash);
-  if (!isValid) {
-    return res.status(401).json({ message: 'Invalid credentials.' });
-  }
-
-  const token = signToken(user.id);
-
-  res.json({
-    token,
-    user: serializeUser(user)
-  });
-}
+};
 
 export async function me(req, res) {
-  res.json({ user: req.user });
+  res.json({ user: serializeUser(req.user) });
 }
 
 export async function updateMe(req, res) {
@@ -99,15 +60,8 @@ export async function updateMe(req, res) {
   const user = await prisma.user.update({
     where: { id: req.user.id },
     data,
-    select: {
-      id: true,
-      fullName: true,
-      email: true,
-      username: true,
-      avatarUrl: true,
-      role: true
-    }
+    include: authUserInclude
   });
 
-  res.json({ user });
+  res.json({ user: serializeUser(user) });
 }

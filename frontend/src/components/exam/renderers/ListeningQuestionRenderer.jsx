@@ -1,5 +1,6 @@
 import QuestionOptions from './QuestionOptions.jsx';
 import AudioPlayerWithLimit from './AudioPlayerWithLimit.jsx';
+import MathJaxContent from '../../math/MathJaxContent.jsx';
 
 export default function ListeningQuestionRenderer({
   question,
@@ -16,7 +17,7 @@ export default function ListeningQuestionRenderer({
         title={question.audioTitle}
         replayLimit={question.audioReplayLimit}
       />
-      <h3>{question.questionText}</h3>
+      <h3><MathJaxContent>{question.questionText}</MathJaxContent></h3>
       <QuestionOptions
         question={question}
         value={value}

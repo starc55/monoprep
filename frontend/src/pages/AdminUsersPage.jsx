@@ -11,11 +11,15 @@ export default function AdminUsersPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
 
-  useEffect(() => {
-    getUsers()
+  function loadUsers() {
+    return getUsers()
       .then(setUsers)
       .catch(() => setUsers([]))
       .finally(() => setLoading(false));
+  }
+
+  useEffect(() => {
+    loadUsers();
   }, []);
 
   if (loading) {

@@ -20,17 +20,6 @@ export const optionSchema = questionOptionSchema.extend({
   questionId: z.string().min(1),
 });
 
-export const registerSchema = z.object({
-  fullName: z.string().min(2).max(120),
-  email: z.string().email(),
-  password: z.string().min(6).max(64),
-});
-
-export const loginSchema = z.object({
-  email: z.string().email(),
-  password: z.string().min(6).max(64),
-});
-
 export const updateProfileSchema = z.object({
   fullName: z.string().min(2).max(120).optional(),
   username: z
@@ -47,7 +36,14 @@ export const examSchema = z.object({
   title: z.string().min(3),
   description: z.string().min(10),
   type: z.enum(["FULL_LENGTH", "PRACTICE", "CUSTOM"]),
-  totalDuration: z.number().int().positive(),
+  accessType: z.enum(["FREE", "PAID"]).optional(),
+  contentMode: z.enum(["REAL_EXAM", "QUESTION_HUB"]).optional(),
+  source: z.enum(["MONOPREP", "OFFICIAL"]).optional(),
+  competitionKind: z.enum(["NONE", "FULL", "MATH", "ENGLISH"]).optional(),
+    competitionStartsAt: z.coerce.date().nullable().optional(),
+    competitionEndsAt: z.coerce.date().nullable().optional(),
+    referenceText: z.string().max(20000).nullable().optional(),
+    totalDuration: z.number().int().positive(),
   isPublished: z.boolean().optional(),
 });
 
@@ -65,8 +61,19 @@ export const sectionUpdateSchema = sectionSchema.partial().extend({
 
 export const passageSchema = z.object({
   title: z.string().min(2),
-  content: z.string().min(20),
+  content: z.string().max(100000),
   category: z.string().min(2),
+  attachmentUrl: optionalAssetUrlSchema,
+  attachmentName: z.string().min(1).max(255).nullable().optional(),
+  attachmentMimeType: z.enum([
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/png",
+    "image/jpeg",
+    "image/webp",
+    "image/gif",
+  ]).nullable().optional(),
 });
 
 export const questionSchema = z.object({
@@ -95,6 +102,7 @@ export const questionSchema = z.object({
   acceptedAnswers: z.array(z.string().min(1)).nullable().optional(),
   correctAnswer: z.any(),
   explanation: z.string().min(5),
+  explanationImageUrl: optionalAssetUrlSchema,
   order: z.number().int().nonnegative(),
   options: z.array(questionOptionSchema).optional(),
 });
@@ -129,23 +137,36 @@ export const supportMessageSchema = z.object({
   pageUrl: z.string().max(500).optional(),
 });
 
-export const mentorSchema = z.object({
-  name: z.string().min(2).max(120),
-  subject: z.string().min(2).max(120),
-  bio: z.string().max(800).nullable().optional(),
+export const desmosLessonSchema = z.object({
+  title: z.string().min(3).max(160),
+  summary: z.string().min(10).max(600),
+  theory: z.string().min(20).max(20000),
   imageUrl: optionalAssetUrlSchema,
-  telegram: z.string().max(120).nullable().optional(),
-  phone: z.string().max(80).nullable().optional(),
-  slots: z.array(z.string().min(1).max(40)).optional(),
-  rating: z.number().min(0).max(5).optional(),
-  isActive: z.boolean().optional(),
+  imageUrls: z.array(
+    z.string().url().or(z.string().startsWith("/"))
+  ).max(8).optional(),
+  isPublished: z.boolean().optional(),
+  sortOrder: z.number().int().min(0).max(10000).optional(),
 });
 
-export const mentorUpdateSchema = mentorSchema.partial();
+export const desmosLessonUpdateSchema = desmosLessonSchema.partial();
+
+export const blitzStartSchema = z.object({
+  size: z.union([z.literal(5), z.literal(10), z.literal(15)]),
+  subject: z.enum(["Mixed", "Math", "Reading & Writing"]).optional(),
+});
+
+export const blitzSubmitSchema = z.object({
+  answers: z.array(z.object({
+    questionId: z.string().min(1),
+    answer: z.any(),
+  })).max(15),
+});
 
 const questionBankChoiceSchema = z.object({
   label: z.string().min(1).max(5),
   text: z.string().min(1).max(2000),
+  imageUrl: optionalAssetUrlSchema,
 });
 
 export const questionBankItemSchema = z.object({
@@ -162,3 +183,13 @@ export const questionBankItemSchema = z.object({
 });
 
 export const questionBankItemUpdateSchema = questionBankItemSchema.partial();
+
+export const questionHubProgressSchema = z.object({
+  questionKey: z.string().min(1).max(240),
+  answer: z.any().nullable().optional(),
+  answered: z.boolean().optional(),
+  correct: z.boolean().nullable().optional(),
+  marked: z.boolean().optional(),
+  attempts: z.number().int().min(0).max(100000).optional(),
+  timeSpent: z.number().int().min(0).max(31536000).optional(),
+});

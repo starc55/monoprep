@@ -1,23 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   BadgeCheck,
-  BookOpenCheck,
   Camera,
   Mail,
   Save,
-  ShieldCheck,
   Sparkles,
-  Target,
   Trophy,
   UserRound
 } from 'lucide-react';
 import AppLayout from '../layouts/AppLayout.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
-import StatCard from '../components/ui/StatCard.jsx';
 import ProgressBar from '../components/ui/ProgressBar.jsx';
 import { useAuthStore } from '../store/authStore.js';
+import { uploadAvatar } from '../services/authService.js';
 import { getMyAnalytics } from '../services/analyticsService.js';
+import { getLeagueFromScore, getLevelFromScore } from '../utils/league.js';
 
 function getInitials(name = '') {
   return name
@@ -36,7 +34,9 @@ export default function ProfilePage() {
   const [avatarUrl, setAvatarUrl] = useState(user?.avatarUrl || '');
   const fileInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [saveSuccess, setSaveSuccess] = useState('');
   const [analytics, setAnalytics] = useState(null);
 
   useEffect(() => {
@@ -47,12 +47,14 @@ export default function ProfilePage() {
     event.preventDefault();
     setSaving(true);
     setSaveError('');
+    setSaveSuccess('');
     try {
       await updateProfile({
         fullName,
         username: username.trim() || null,
         avatarUrl: avatarUrl.trim() || null
       });
+      setSaveSuccess('Profile changes saved.');
     } catch (error) {
       setSaveError(error.response?.data?.message || 'Profile could not be saved right now. Please try again after signing in.');
     } finally {
@@ -60,37 +62,61 @@ export default function ProfilePage() {
     }
   }
 
-  function handleAvatarFile(event) {
+  async function handleAvatarFile(event) {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setAvatarUrl(String(reader.result || ''));
-    };
-    reader.readAsDataURL(file);
+    setUploadingAvatar(true);
+    setSaveError('');
+    setSaveSuccess('');
+    try {
+      const uploadedUrl = await uploadAvatar(file);
+      setAvatarUrl(uploadedUrl);
+      await updateProfile({ avatarUrl: uploadedUrl });
+      setSaveSuccess('Profile image updated.');
+    } catch (error) {
+      setSaveError(error.message || 'Avatar could not be uploaded.');
+    } finally {
+      setUploadingAvatar(false);
+      event.target.value = '';
+    }
   }
 
   const attempts = analytics?.overview?.attemptsTaken || 0;
   const bestScore = analytics?.overview?.bestScore || 0;
+  const gamification = analytics?.overview?.gamification;
+  const league = gamification?.league
+    ? { key: gamification.league.toLowerCase(), name: gamification.league }
+    : getLeagueFromScore(bestScore);
+  const level = gamification?.level || getLevelFromScore(bestScore, attempts, analytics?.overview?.averageScore || 0);
 
   return (
     <AppLayout title="Profile" subtitle="Manage your account information and track your prep momentum.">
       <section className="profile-hero">
-        <button type="button" className="profile-avatar editable-avatar" onClick={() => fileInputRef.current?.click()}>
+        <button
+          type="button"
+          className="profile-avatar editable-avatar"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploadingAvatar}
+        >
           {avatarUrl ? <img src={avatarUrl} alt="" /> : getInitials(user?.fullName)}
-          <span><Camera aria-hidden="true" /> Change image</span>
+          <span><Camera aria-hidden="true" /> {uploadingAvatar ? 'Uploading...' : 'Change image'}</span>
         </button>
-        <input ref={fileInputRef} className="sr-only" type="file" accept="image/*" onChange={handleAvatarFile} />
+        <input
+          ref={fileInputRef}
+          className="sr-only"
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          onChange={handleAvatarFile}
+          disabled={uploadingAvatar}
+        />
         <div className="profile-identity">
-          <span className="profile-chip"><BadgeCheck aria-hidden="true" /> SAT Student</span>
+          <div className="profile-chip-row">
+            <span className="profile-chip"><BadgeCheck aria-hidden="true" /> SAT Student</span>
+            <span className={`league-badge league-${league.key}`}>Level {level} - {league.name}</span>
+          </div>
           <h2>{user?.fullName || 'MonoPrep Student'}</h2>
           <p><Mail aria-hidden="true" /> {user?.username ? `@${user.username}` : user?.email || 'Student account'}</p>
-        </div>
-        <div className="profile-highlights">
-          <div><strong>{attempts}</strong><span>Tests completed</span></div>
-          <div><strong>{bestScore}%</strong><span>Best score</span></div>
-          <div><strong>{analytics?.overview?.averageScore || 0}%</strong><span>Average accuracy</span></div>
         </div>
       </section>
 
@@ -119,6 +145,7 @@ export default function ProfilePage() {
               <input value={user?.email || ''} disabled />
             </label>
             {saveError ? <p className="support-status error">{saveError}</p> : null}
+            {saveSuccess ? <p className="support-status success">{saveSuccess}</p> : null}
             <Button type="submit" disabled={saving}>
               {saving ? <Sparkles aria-hidden="true" /> : <Save aria-hidden="true" />}
               {saving ? 'Saving...' : 'Save profile'}
@@ -126,28 +153,13 @@ export default function ProfilePage() {
           </form>
         </Card>
 
-        <div className="profile-feature-grid">
-          <StatCard icon={ShieldCheck} tone="green" label="Secure Account" value="Protected" hint="Authenticated profile and saved progress." />
-          <StatCard icon={BookOpenCheck} tone="blue" label="Track Progress" value={`${attempts} tests`} hint="Every completed attempt updates analytics." />
-          <StatCard icon={Sparkles} tone="violet" label="Smart Practice" value="AI Ready" hint="Feedback is available after submission." />
-          <StatCard icon={Target} tone="amber" label="Achieve Goals" value={`${bestScore}%`} hint="Your personal best recorded so far." />
-        </div>
+        <section className="profile-momentum-panel">
+          <div className="profile-momentum-heading"><span>Learning profile</span><h3>{league.name} League</h3><p>Your league and level are calculated from submitted MonoPrep work.</p></div>
+          <div className="profile-momentum-metrics"><div><span>Level</span><strong>{level}</strong></div><div><span>Completed</span><strong>{attempts}</strong></div><div><span>Best score</span><strong>{bestScore || '--'}</strong></div></div>
+          <div className="profile-progress-content"><div><h3>Practice journey</h3><p>Complete timed papers to sharpen your analytics and build league progress.</p></div><div className="profile-progress-score"><strong>{bestScore}</strong><span>score</span></div></div>
+          <ProgressBar value={Math.min(100, Math.round((bestScore / 1600) * 100))} />
+        </section>
       </div>
-
-      <Card className="profile-progress-card">
-        <div className="profile-progress-content">
-          <span className="settings-card-icon blue"><Trophy aria-hidden="true" /></span>
-          <div>
-            <h3>Practice journey</h3>
-            <p>Complete more timed papers to sharpen your analytics and grow your best score.</p>
-          </div>
-          <div className="profile-progress-score">
-            <strong>{bestScore}%</strong>
-            <span>Best score</span>
-          </div>
-        </div>
-        <ProgressBar value={bestScore} />
-      </Card>
     </AppLayout>
   );
 }

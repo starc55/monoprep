@@ -1,65 +1,251 @@
-import { useEffect, useState } from 'react';
-import { ClipboardList } from 'lucide-react';
-import { useForm } from 'react-hook-form';
-import AdminLayout from '../layouts/AdminLayout.jsx';
-import AdminExamBuilder from '../components/admin/AdminExamBuilder.jsx';
-import Button from '../components/ui/Button.jsx';
-import Card from '../components/ui/Card.jsx';
-import Loader from '../components/ui/Loader.jsx';
-import EmptyState from '../components/ui/EmptyState.jsx';
-import Modal from '../components/ui/Modal.jsx';
-import ConfirmActionModal from '../components/ui/ConfirmActionModal.jsx';
-import { getApiErrorMessage } from '../utils/apiError.js';
+import { Fragment, useEffect, useState } from "react";
+import { ChevronDown, Eye, FileQuestion, Pencil, Plus, Trash2 } from "lucide-react";
+import { useForm } from "react-hook-form";
+import AdminLayout from "../layouts/AdminLayout.jsx";
+import TeacherLayout from "../layouts/TeacherLayout.jsx";
+import AdminExamBuilder from "../components/admin/AdminExamBuilder.jsx";
+import Button from "../components/ui/Button.jsx";
+import Card from "../components/ui/Card.jsx";
+import Loader from "../components/ui/Loader.jsx";
+import EmptyState from "../components/ui/EmptyState.jsx";
+import Modal from "../components/ui/Modal.jsx";
+import ConfirmActionModal from "../components/ui/ConfirmActionModal.jsx";
+import PremiumSelect from "../components/ui/PremiumSelect.jsx";
+import RowActionMenu from "../components/ui/RowActionMenu.jsx";
+import MathJaxContent, { stripRichTextMarkup } from "../components/math/MathJaxContent.jsx";
+import RichMathEditor from "../components/math/RichMathEditor.jsx";
+import QuestionImage from "../components/exam/renderers/QuestionImage.jsx";
+import { getApiErrorMessage } from "../utils/apiError.js";
+import "../styles/pages/teacher-exams.css";
 import {
-  createExam,
-  createPassage,
-  createQuestion,
-  createSection,
-  deleteExam,
-  deleteSection,
-  getExams,
-  getPassages,
-  updateSection,
-  updateExam,
-  uploadQuestionImage
-} from '../services/examService.js';
+  createExam, createPassage, createQuestion, createSection, deleteExam, deleteQuestion,
+  deleteSection, getExam, getExams, getPassages, updateExam, updateQuestion,
+  updateSection, uploadPassageFile, uploadQuestionImage,
+} from "../services/examService.js";
+import { createQuestionBankItem } from "../services/questionBankService.js";
 
-export default function AdminExamsPage() {
+const sourceOptions = [
+  { value: "MONOPREP", label: "MonoPrep Exam" },
+  { value: "OFFICIAL", label: "Official Exam" },
+];
+const OPTION_LABELS = ["A", "B", "C", "D"];
+
+function toDateTimeLocal(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+}
+
+function questionCount(exam) {
+  return (exam.sections || []).reduce((total, section) => total + (section.questionsCount || section.questions?.length || 0), 0);
+}
+
+function optionValues(question) {
+  const options = new Map((question.options || []).map((option) => [option.label, option]));
+  const correctValue = question.correctAnswer?.value
+    ?? question.correctAnswer
+    ?? (question.options || []).find((option) => option.isCorrect)?.label
+    ?? "A";
+
+  return {
+    correctOption: String(correctValue).toUpperCase(),
+    ...Object.fromEntries(OPTION_LABELS.map((label) => [`option${label}`, options.get(label)?.text || ""])),
+    ...Object.fromEntries(OPTION_LABELS.map((label) => [`option${label}ImageUrl`, options.get(label)?.imageUrl || ""])),
+  };
+}
+
+export default function AdminExamsPage({ mode = "admin" }) {
+  const Layout = mode === "teacher" ? TeacherLayout : AdminLayout;
+  const subtitle = mode === "teacher"
+    ? "Create and maintain Free or Premium SAT exams from one focused catalog."
+    : "Table-first exam publishing, modules, and question management.";
   const [loading, setLoading] = useState(true);
   const [exams, setExams] = useState([]);
   const [passages, setPassages] = useState([]);
+  const [builderSignal, setBuilderSignal] = useState(0);
+  const [expandedExamId, setExpandedExamId] = useState("");
+  const [examDetails, setExamDetails] = useState({});
+  const [detailLoadingId, setDetailLoadingId] = useState("");
   const [editingSection, setEditingSection] = useState(null);
-  const [sectionStatus, setSectionStatus] = useState(null);
+  const [editingExam, setEditingExam] = useState(null);
+  const [editingQuestion, setEditingQuestion] = useState(null);
+  const [viewingExam, setViewingExam] = useState(null);
+  const [viewingQuestion, setViewingQuestion] = useState(null);
+  const [authoringSection, setAuthoringSection] = useState(null);
+  const [actionStatus, setActionStatus] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmPending, setConfirmPending] = useState(false);
-  const sectionForm = useForm({
-    defaultValues: { title: '', type: 'reading_writing', duration: 30, order: 1 }
+  const [editingImageField, setEditingImageField] = useState("");
+
+  const sectionForm = useForm({ defaultValues: { title: "", type: "reading_writing", duration: 30, order: 1 } });
+  const examForm = useForm({
+    defaultValues: {
+      title: "", description: "", type: "FULL_LENGTH", accessType: "FREE", source: "MONOPREP",
+      contentMode: "REAL_EXAM", competitionKind: "NONE", competitionStartsAt: "",
+      competitionEndsAt: "", referenceText: "", totalDuration: 87, isPublished: "false",
+    },
+  });
+  const questionForm = useForm({
+    defaultValues: {
+      questionText: "", formulaText: "", skill: "", difficulty: "MEDIUM", explanation: "", explanationImageUrl: "", order: 1,
+      correctOption: "A", optionA: "", optionAImageUrl: "", optionB: "", optionBImageUrl: "",
+      optionC: "", optionCImageUrl: "", optionD: "", optionDImageUrl: "",
+    },
   });
 
   async function load() {
     const [examRows, passageRows] = await Promise.all([getExams(), getPassages()]);
     setExams(examRows);
     setPassages(passageRows);
+    if (expandedExamId) {
+      const detail = await getExam(expandedExamId).catch(() => null);
+      if (detail) setExamDetails((current) => ({ ...current, [expandedExamId]: detail }));
+    }
   }
 
   useEffect(() => {
-    load()
-      .catch(() => {
-        setExams([]);
-        setPassages([]);
-      })
-      .finally(() => setLoading(false));
+    load().catch(() => { setExams([]); setPassages([]); }).finally(() => setLoading(false));
   }, []);
+
+  async function toggleExam(examId) {
+    if (expandedExamId === examId) {
+      setExpandedExamId("");
+      return;
+    }
+    setExpandedExamId(examId);
+    if (examDetails[examId]) return;
+    setDetailLoadingId(examId);
+    try {
+      const detail = await getExam(examId);
+      setExamDetails((current) => ({ ...current, [examId]: detail }));
+    } finally {
+      setDetailLoadingId("");
+    }
+  }
+
+  function openExamEditor(exam) {
+    setEditingExam(exam);
+    setActionStatus(null);
+    examForm.reset({
+      title: exam.title,
+      description: exam.description,
+      type: exam.type,
+      accessType: exam.accessType,
+      source: exam.source || "MONOPREP",
+      contentMode: exam.contentMode || "REAL_EXAM",
+      competitionKind: exam.competitionKind || "NONE",
+      competitionStartsAt: toDateTimeLocal(exam.competitionStartsAt),
+      competitionEndsAt: toDateTimeLocal(exam.competitionEndsAt),
+      referenceText: exam.referenceText || "",
+      totalDuration: exam.totalDuration || 87,
+      isPublished: String(exam.isPublished),
+    });
+  }
 
   function openSectionEditor(section) {
     setEditingSection(section);
-    setSectionStatus(null);
-    sectionForm.reset({
-      title: section.title,
-      type: section.type,
-      duration: section.duration,
-      order: section.order
+    setActionStatus(null);
+    sectionForm.reset({ title: section.title, type: section.type, duration: section.duration, order: section.order });
+  }
+
+  function openQuestionEditor(question, sectionType) {
+    setEditingQuestion({ ...question, sectionType });
+    setActionStatus(null);
+    questionForm.reset({
+      questionText: question.questionText,
+      formulaText: question.formulaText || "",
+      skill: question.skill,
+      difficulty: question.difficulty,
+      explanation: question.explanation,
+      explanationImageUrl: question.explanationImageUrl || "",
+      order: question.order,
+      ...optionValues(question),
     });
+  }
+
+  async function handleExamUpdate(values) {
+    setActionStatus({ type: "pending", message: "Saving exam..." });
+    try {
+      await updateExam(editingExam.id, {
+        title: values.title.trim(),
+        description: values.description.trim(),
+        type: values.contentMode === "QUESTION_HUB" ? "CUSTOM" : values.type,
+        accessType: values.contentMode === "QUESTION_HUB" ? "FREE" : values.accessType,
+        source: values.contentMode === "QUESTION_HUB" ? "MONOPREP" : values.source,
+        contentMode: values.contentMode,
+        competitionKind: values.contentMode === "REAL_EXAM" ? values.competitionKind : "NONE",
+        competitionStartsAt: values.contentMode === "REAL_EXAM" && values.competitionKind !== "NONE" ? new Date(values.competitionStartsAt).toISOString() : null,
+        competitionEndsAt: values.contentMode === "REAL_EXAM" && values.competitionKind !== "NONE" ? new Date(values.competitionEndsAt).toISOString() : null,
+        referenceText: values.contentMode === "REAL_EXAM" ? values.referenceText?.trim() || null : null,
+        totalDuration: values.contentMode === "QUESTION_HUB" ? 1 : Number(values.totalDuration),
+        isPublished: values.isPublished === "true",
+      });
+      await load();
+      setEditingExam(null);
+    } catch (error) {
+      setActionStatus({ type: "error", message: getApiErrorMessage(error, "Exam could not be updated.") });
+    }
+  }
+
+  async function handleSectionUpdate(values) {
+    setActionStatus({ type: "pending", message: "Saving module..." });
+    try {
+      await updateSection(editingSection.id, { title: values.title.trim(), type: values.type, duration: Number(values.duration), order: Number(values.order) });
+      await load();
+      setEditingSection(null);
+    } catch (error) {
+      setActionStatus({ type: "error", message: getApiErrorMessage(error, "Module could not be updated.") });
+    }
+  }
+
+  async function handleQuestionUpdate(values) {
+    setActionStatus({ type: "pending", message: "Saving question..." });
+    try {
+      const payload = {
+        questionText: values.questionText.trim(),
+        formulaText: values.formulaText.trim() || null,
+        skill: values.skill.trim(),
+        difficulty: values.difficulty,
+        explanation: values.explanation.trim(),
+        explanationImageUrl: values.explanationImageUrl || null,
+        order: Number(values.order),
+      };
+
+      if (editingQuestion.sectionType === "math" && editingQuestion.type !== "text_input") {
+        payload.correctAnswer = { value: values.correctOption };
+        payload.options = OPTION_LABELS.map((label, index) => ({
+          label,
+          text: values[`option${label}`].trim(),
+          imageUrl: values[`option${label}ImageUrl`] || null,
+          isCorrect: values.correctOption === label,
+          order: index + 1,
+        }));
+      }
+
+      await updateQuestion(editingQuestion.id, payload);
+      await load();
+      setEditingQuestion(null);
+    } catch (error) {
+      setActionStatus({ type: "error", message: getApiErrorMessage(error, "Question could not be updated.") });
+    }
+  }
+
+  async function handleQuestionEditorImageUpload(event, fieldName) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setEditingImageField(fieldName);
+    setActionStatus({ type: "pending", message: "Uploading image..." });
+    try {
+      const url = await uploadQuestionImage(file);
+      questionForm.setValue(fieldName, url, { shouldDirty: true });
+      setActionStatus(null);
+    } catch (error) {
+      event.target.value = "";
+      setActionStatus({ type: "error", message: getApiErrorMessage(error, "Image could not be uploaded.") });
+    } finally {
+      setEditingImageField("");
+    }
   }
 
   async function runConfirmAction() {
@@ -74,213 +260,249 @@ export default function AdminExamsPage() {
     }
   }
 
-  async function handleSectionUpdate(values) {
-    setSectionStatus({ type: 'pending', message: 'Saving section...' });
-
-    try {
-      await updateSection(editingSection.id, {
-        title: values.title.trim(),
-        type: values.type,
-        duration: Number(values.duration),
-        order: Number(values.order)
-      });
-      await load();
-      setEditingSection(null);
-      setSectionStatus(null);
-    } catch (error) {
-      setSectionStatus({
-        type: 'error',
-        message: getApiErrorMessage(error, 'Section could not be updated.')
-      });
-    }
-  }
-
   if (loading) {
-    return (
-      <AdminLayout title="Exams" subtitle="Create, publish, unpublish, and organize exam content.">
-        <Loader label="Loading exams..." />
-      </AdminLayout>
-    );
+    return <Layout title="Exams" subtitle={subtitle}><Loader label="Loading exams..." /></Layout>;
   }
 
   return (
-    <AdminLayout title="Exams" subtitle="Create, publish, unpublish, and organize exam content.">
-      <AdminExamBuilder
-        exams={exams}
-        passages={passages}
-        onCreateExam={async (payload) => {
-          const exam = await createExam(payload);
-          await load();
-          return exam;
-        }}
-        onCreateSection={async (payload) => {
-          const section = await createSection(payload);
-          await load();
-          return section;
-        }}
-        onCreatePassage={async (payload) => {
-          const passage = await createPassage(payload);
-          await load();
-          return passage;
-        }}
-        onCreateQuestion={async (payload) => {
-          const question = await createQuestion(payload);
-          await load();
-          return question;
-        }}
-        onUploadImage={uploadQuestionImage}
-      />
+    <Layout title="Exams" subtitle={subtitle} actions={<Button onClick={() => setBuilderSignal((value) => value + 1)}><Plus aria-hidden="true" /> Create exam</Button>}>
+      <div className={mode === "teacher" ? "teacher-exam-workspace" : "admin-exam-workspace"}>
+        <AdminExamBuilder
+          exams={exams}
+          passages={passages}
+          openSignal={builderSignal}
+          hideTrigger
+          onCreateExam={async (payload) => { const exam = await createExam(payload); await load(); return exam; }}
+          onCreateSection={async (payload) => { const section = await createSection(payload); await load(); return section; }}
+          onCreatePassage={async (payload) => { const passage = await createPassage(payload); await load(); return passage; }}
+          onCreateQuestion={async (payload) => { const question = await createQuestion(payload); await load(); return question; }}
+          onCreateQuestionHubItem={createQuestionBankItem}
+          onUploadImage={uploadQuestionImage}
+          onUploadPassageFile={uploadPassageFile}
+        />
 
-      <div className="admin-content-grid">
-        <Card title="Exam Catalog">
-          {exams.length ? <div className="table-wrap">
-            <table className="data-table admin-data-table">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Type</th>
-                  <th>Sections</th>
-                  <th>Published</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {exams.map((exam) => (
-                  <tr key={exam.id}>
-                    <td data-label="Title">{exam.title}</td>
-                    <td data-label="Type">{exam.type}</td>
-                    <td data-label="Sections">{exam.sections.length}</td>
-                    <td data-label="Published">{exam.isPublished ? 'Yes' : 'No'}</td>
-                    <td data-label="Actions" className="table-actions">
-                      <Button
-                        variant="ghost"
-                        onClick={async () => {
-                          await updateExam(exam.id, { isPublished: !exam.isPublished });
-                          await load();
-                        }}
-                      >
-                        {exam.isPublished ? 'Unpublish' : 'Publish'}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        onClick={() => setConfirmAction({
-                          title: 'Delete exam?',
-                          message: `"${exam.title}" and all of its sections, questions, answers, and attempts will be removed.`,
-                          confirmLabel: 'Delete exam',
-                          run: () => deleteExam(exam.id)
-                        })}
-                      >
-                        Delete
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div> : (
-            <EmptyState
-              icon={ClipboardList}
-              title="No exams created"
-              message="Create an exam above to start assembling sections and questions."
-            />
-          )}
-        </Card>
-
-        <Card title="Sections">
-          {exams.some((exam) => exam.sections.length) ? <div className="review-list">
-            {exams.flatMap((exam) =>
-              exam.sections.map((section) => (
-                <article key={section.id} className="review-item">
-                  <div className="review-item-head">
-                    <strong>{section.title}</strong>
-                    <span className="pill">{exam.title}</span>
-                  </div>
-                  <p>{section.type} - {section.duration} min - {section.questionsCount} questions</p>
-                  <div className="page-actions">
-                    <Button variant="ghost" onClick={() => openSectionEditor(section)}>
-                      Edit
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      onClick={() => setConfirmAction({
-                        title: 'Delete section?',
-                        message: `"${section.title}" and its questions will be removed from this exam.`,
-                        confirmLabel: 'Delete section',
-                        run: () => deleteSection(section.id)
-                      })}
-                    >
-                      Delete
-                    </Button>
-                  </div>
-                </article>
-              ))
-            )}
-          </div> : (
-            <EmptyState
-              icon={ClipboardList}
-              title="No sections yet"
-              message="Exam modules will appear here once they are created."
-            />
-          )}
+        <Card title="Exam catalog" className="crm-table-card exam-catalog-card">
+          {exams.length ? (
+            <div className="table-wrap">
+              <table className="data-table crm-data-table exam-catalog-table">
+                <thead><tr><th>Exam</th><th>Source</th><th>Format</th><th>Access</th><th>Content</th><th>Status</th><th aria-label="Actions" /></tr></thead>
+                <tbody>
+                  {exams.map((exam) => {
+                    const expanded = expandedExamId === exam.id;
+                    const detail = examDetails[exam.id];
+                    return (
+                      <Fragment key={exam.id}>
+                        <tr className={expanded ? "expanded-row" : ""}>
+                          <td data-label="Exam"><button type="button" className="crm-expand-button" onClick={() => toggleExam(exam.id)} aria-expanded={expanded}><ChevronDown aria-hidden="true" /><span><strong>{exam.title}</strong><small>{exam.description}</small></span></button></td>
+                          <td data-label="Source"><span className={`table-status source-${(exam.source || "MONOPREP").toLowerCase()}`}>{exam.source === "OFFICIAL" ? "Official" : "MonoPrep"}</span></td>
+                          <td data-label="Format"><strong className="table-compact-value">{exam.type.replaceAll("_", " ")}</strong><small>{exam.contentMode === "QUESTION_HUB" ? "Question Hub" : "Real Exam"}</small></td>
+                          <td data-label="Access"><span className={`access-badge ${exam.accessType === "PAID" ? "premium" : "free"}`}>{exam.accessType === "PAID" ? "Premium" : "Free"}</span></td>
+                          <td data-label="Content">{exam.sections.length} modules · {questionCount(exam)} questions</td>
+                          <td data-label="Status"><span className={`table-status ${exam.isPublished ? "approved" : "pending"}`}>{exam.isPublished ? "Published" : "Draft"}</span></td>
+                          <td className="table-actions"><RowActionMenu label={`Actions for ${exam.title}`} items={[
+                            { label: "View", icon: Eye, onSelect: () => setViewingExam(exam) },
+                            { label: "Edit", icon: Pencil, onSelect: () => openExamEditor(exam) },
+                            { label: "Delete", icon: Trash2, tone: "danger", onSelect: () => setConfirmAction({ title: "Delete exam?", message: `"${exam.title}" and all modules, questions, and attempts will be removed.`, confirmLabel: "Delete exam", run: () => deleteExam(exam.id) }) },
+                          ]} /></td>
+                        </tr>
+                        {expanded ? (
+                          <tr className="exam-detail-row"><td colSpan="7">
+                            {detailLoadingId === exam.id ? <Loader label="Loading exam questions..." /> : (
+                              <div className="exam-inline-editor">
+                                {(detail?.sections || []).map((section) => (
+                                  <section key={section.id} className="exam-inline-section">
+                                    <header><div><strong>{section.title}</strong><span>{section.type.replaceAll("_", " ")} · {section.duration} min · {section.questions.length} questions</span></div><RowActionMenu label={`Actions for ${section.title}`} items={[
+                                      { label: "Add question", icon: Plus, onSelect: () => setAuthoringSection({ ...section, examId: exam.id, examTitle: exam.title, questionsCount: section.questions.length, contentMode: exam.contentMode }) },
+                                      { label: "Edit module", icon: Pencil, onSelect: () => openSectionEditor(section) },
+                                      { label: "Delete module", icon: Trash2, tone: "danger", onSelect: () => setConfirmAction({ title: "Delete module?", message: `"${section.title}" and all questions inside it will be removed.`, confirmLabel: "Delete module", run: () => deleteSection(section.id) }) },
+                                    ]} /></header>
+                                    {section.questions.length ? (
+                                      <div className="table-wrap"><table className="data-table nested-question-table"><thead><tr><th>#</th><th>Question</th><th>Skill</th><th>Difficulty</th><th aria-label="Actions" /></tr></thead><tbody>
+                                        {section.questions.map((question) => <tr key={question.id}><td>{question.order}</td><td><strong>{stripRichTextMarkup(question.questionText)}</strong><small>{question.type.replaceAll("_", " ")}</small></td><td>{question.skill.replaceAll("_", " ")}</td><td><span className={`table-status difficulty-${question.difficulty.toLowerCase()}`}>{question.difficulty}</span></td><td className="table-actions"><RowActionMenu label="Question actions" items={[
+                                          { label: "View", icon: Eye, onSelect: () => setViewingQuestion(question) },
+                                          { label: "Edit", icon: Pencil, onSelect: () => openQuestionEditor(question, section.type) },
+                                          { label: "Delete", icon: Trash2, tone: "danger", onSelect: () => setConfirmAction({ title: "Delete question?", message: "The question, options, and saved answers for it will be removed.", confirmLabel: "Delete question", run: () => deleteQuestion(question.id) }) },
+                                        ]} /></td></tr>)}
+                                      </tbody></table></div>
+                                    ) : <div className="inline-empty"><FileQuestion aria-hidden="true" /> No questions in this module yet.</div>}
+                                  </section>
+                                ))}
+                                {!detail?.sections?.length ? <div className="inline-empty"><FileQuestion aria-hidden="true" /> No modules in this exam yet.</div> : null}
+                              </div>
+                            )}
+                          </td></tr>
+                        ) : null}
+                      </Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : <EmptyState icon={FileQuestion} title="No exams created" message="Create the first MonoPrep or Official exam." actionLabel="Create exam" actionOnClick={() => setBuilderSignal((value) => value + 1)} />}
         </Card>
       </div>
 
-      <Modal
-        open={Boolean(editingSection)}
-        title="Edit Section"
-        onClose={() => setEditingSection(null)}
-        actions={(
-          <>
-            <Button variant="ghost" onClick={() => setEditingSection(null)}>Cancel</Button>
-            <Button
-              type="submit"
-              form="admin-section-edit-form"
-              disabled={sectionStatus?.type === 'pending'}
-            >
-              {sectionStatus?.type === 'pending' ? 'Saving...' : 'Save section'}
-            </Button>
-          </>
-        )}
-      >
-        <form
-          id="admin-section-edit-form"
-          className="stack-form"
-          onSubmit={sectionForm.handleSubmit(handleSectionUpdate)}
-        >
-          <label className="form-field">
-            <span>Title</span>
-            <input {...sectionForm.register('title', { required: true, minLength: 2 })} />
-          </label>
-          <label className="form-field">
-            <span>Type</span>
-            <select {...sectionForm.register('type')}>
-              <option value="reading_writing">reading_writing</option>
-              <option value="math">math</option>
-              <option value="custom_practice">custom_practice</option>
-            </select>
-          </label>
-          <label className="form-field">
-            <span>Duration (minutes)</span>
-            <input type="number" min="1" {...sectionForm.register('duration', { required: true, min: 1 })} />
-          </label>
-          <label className="form-field">
-            <span>Order</span>
-            <input type="number" min="0" {...sectionForm.register('order', { required: true, min: 0 })} />
-          </label>
-          {sectionStatus?.type === 'error' ? (
-            <p className="support-status error">{sectionStatus.message}</p>
-          ) : null}
+      <Modal open={Boolean(viewingExam)} title="Exam details" onClose={() => setViewingExam(null)} actions={<Button variant="ghost" onClick={() => setViewingExam(null)}>Close</Button>}>
+        {viewingExam ? <div className="exam-detail-grid"><div><span>Title</span><b>{viewingExam.title}</b></div><div><span>Source</span><b>{viewingExam.source || "MONOPREP"}</b></div><div><span>Access</span><b>{viewingExam.accessType}</b></div><div><span>Status</span><b>{viewingExam.isPublished ? "Published" : "Draft"}</b></div><div><span>Mode</span><b>{viewingExam.contentMode}</b></div><div><span>Duration</span><b>{viewingExam.totalDuration} minutes</b></div><p>{viewingExam.description}</p></div> : null}
+      </Modal>
+
+      <Modal open={Boolean(viewingQuestion)} title="Question details" className="modal-card-wide" onClose={() => setViewingQuestion(null)} actions={<Button variant="ghost" onClick={() => setViewingQuestion(null)}>Close</Button>}>
+        {viewingQuestion ? (
+          <div className="question-preview">
+            <div className="preview-pills"><span className="pill">{viewingQuestion.skill}</span><span className="pill">{viewingQuestion.difficulty}</span></div>
+            {viewingQuestion.formulaText ? <MathJaxContent block className="preview-formula">{viewingQuestion.formulaText}</MathJaxContent> : null}
+            <MathJaxContent block className="preview-question">{viewingQuestion.questionText}</MathJaxContent>
+            <div className="preview-options">
+              {viewingQuestion.options?.map((option) => (
+                <div key={option.id || option.label} className={`preview-option ${option.isCorrect ? "correct" : ""}`.trim()}>
+                  <p><strong>{option.label}.</strong> <MathJaxContent>{option.text}</MathJaxContent></p>
+                  {option.imageUrl ? <QuestionImage src={option.imageUrl} alt={`Option ${option.label}`} /> : null}
+                </div>
+              ))}
+            </div>
+            <div className="preview-explanation">
+              <strong>Explanation</strong>
+              <MathJaxContent block>{viewingQuestion.explanation}</MathJaxContent>
+              {viewingQuestion.explanationImageUrl ? <QuestionImage src={viewingQuestion.explanationImageUrl} alt="Worked solution" /> : null}
+            </div>
+          </div>
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(authoringSection)} title="Add question" className="modal-card-wide question-authoring-modal" onClose={() => setAuthoringSection(null)} actions={<Button variant="ghost" onClick={() => setAuthoringSection(null)}>Close</Button>}>
+        {authoringSection ? (
+          <AdminQuestionWorkspace
+            sections={[authoringSection]}
+            passages={passages}
+            onCreatePassage={async (payload) => { const passage = await createPassage(payload); await load(); return passage; }}
+            onCreateQuestion={async (payload) => { const question = await createQuestion(payload); await load(); setAuthoringSection((current) => current ? { ...current, questionsCount: (current.questionsCount || 0) + 1 } : current); return question; }}
+            onCreateQuestionHubItem={createQuestionBankItem}
+            onUploadImage={uploadQuestionImage}
+            onUploadPassageFile={uploadPassageFile}
+          />
+        ) : null}
+      </Modal>
+
+      <Modal open={Boolean(editingExam)} title="Edit exam" className="modal-card-wide crm-form-modal" onClose={() => setEditingExam(null)} actions={<><Button variant="ghost" onClick={() => setEditingExam(null)}>Cancel</Button><Button type="submit" form="exam-edit-form" disabled={actionStatus?.type === "pending"}>Save exam</Button></>}>
+        <form id="exam-edit-form" className="stack-form" onSubmit={examForm.handleSubmit(handleExamUpdate)}>
+          <div className="crm-form-row"><label className="form-field"><span>Title</span><input {...examForm.register("title", { required: true, minLength: 3 })} /></label>{examForm.watch("contentMode") === "REAL_EXAM" ? <label className="form-field"><span>Total minutes</span><input type="number" min="1" {...examForm.register("totalDuration", { required: true, min: 1 })} /></label> : null}</div>
+          <label className="form-field"><span>Description</span><textarea {...examForm.register("description", { required: true, minLength: 10 })} /></label>
+          {examForm.watch("contentMode") === "REAL_EXAM" ? <><div className="crm-form-row crm-form-row-three"><div className="form-field"><span>Source</span><PremiumSelect ariaLabel="Exam source" value={examForm.watch("source")} onChange={(value) => examForm.setValue("source", value)} options={sourceOptions} /></div><div className="form-field"><span>Type</span><PremiumSelect ariaLabel="Exam type" value={examForm.watch("type")} onChange={(value) => examForm.setValue("type", value)} options={[{ value: "FULL_LENGTH", label: "Full Length SAT" }, { value: "PRACTICE", label: "Practice Exam" }, { value: "CUSTOM", label: "Custom Practice" }]} /></div><div className="form-field"><span>Access</span><PremiumSelect ariaLabel="Exam access" value={examForm.watch("accessType")} onChange={(value) => examForm.setValue("accessType", value)} options={[{ value: "FREE", label: "Free" }, { value: "PAID", label: "Premium" }]} /></div></div><RichMathEditor form={examForm} name="referenceText" label="Shared exam reference" placeholder="This reference is entered once and appears throughout Math sections." showMathTemplates /><div className="form-field"><span>Competition</span><PremiumSelect ariaLabel="Competition" value={examForm.watch("competitionKind")} onChange={(value) => examForm.setValue("competitionKind", value)} options={[{ value: "NONE", label: "Regular practice exam" }, { value: "FULL", label: "Monthly full competition" }, { value: "MATH", label: "Biweekly math competition" }, { value: "ENGLISH", label: "Biweekly English competition" }]} /></div>{examForm.watch("competitionKind") !== "NONE" ? <div className="crm-form-row"><label className="form-field"><span>Starts at</span><input type="datetime-local" required {...examForm.register("competitionStartsAt")} /></label><label className="form-field"><span>Ends at</span><input type="datetime-local" required {...examForm.register("competitionEndsAt")} /></label></div> : null}</> : <p className="builder-default-note">Question Hub content remains free and does not use exam source, access, modules, or competition scheduling.</p>}
+          <div className="form-field"><span>Status</span><PremiumSelect ariaLabel="Exam status" value={examForm.watch("isPublished")} onChange={(value) => examForm.setValue("isPublished", value)} options={[{ value: "false", label: "Draft" }, { value: "true", label: "Published" }]} /></div>
+          {actionStatus?.type === "error" ? <p className="support-status error">{actionStatus.message}</p> : null}
         </form>
       </Modal>
-      <ConfirmActionModal
-        open={Boolean(confirmAction)}
-        title={confirmAction?.title}
-        message={confirmAction?.message}
-        confirmLabel={confirmAction?.confirmLabel}
-        pending={confirmPending}
-        onCancel={() => setConfirmAction(null)}
-        onConfirm={runConfirmAction}
-      />
-    </AdminLayout>
+
+      <Modal open={Boolean(editingSection)} title="Edit module" onClose={() => setEditingSection(null)} actions={<><Button variant="ghost" onClick={() => setEditingSection(null)}>Cancel</Button><Button type="submit" form="section-edit-form" disabled={actionStatus?.type === "pending"}>Save module</Button></>}>
+        <form id="section-edit-form" className="stack-form" onSubmit={sectionForm.handleSubmit(handleSectionUpdate)}><label className="form-field"><span>Title</span><input {...sectionForm.register("title", { required: true, minLength: 2 })} /></label><div className="form-field"><span>Type</span><PremiumSelect ariaLabel="Module type" value={sectionForm.watch("type")} onChange={(value) => sectionForm.setValue("type", value)} options={[{ value: "reading_writing", label: "Reading & Writing" }, { value: "math", label: "Math" }, { value: "custom_practice", label: "Custom Practice" }]} /></div><div className="crm-form-row"><label className="form-field"><span>Duration</span><input type="number" min="1" {...sectionForm.register("duration", { required: true, min: 1 })} /></label><label className="form-field"><span>Order</span><input type="number" min="0" {...sectionForm.register("order", { required: true, min: 0 })} /></label></div>{actionStatus?.type === "error" ? <p className="support-status error">{actionStatus.message}</p> : null}</form>
+      </Modal>
+
+      <Modal open={Boolean(editingQuestion)} title="Edit question" className="modal-card-wide" onClose={() => setEditingQuestion(null)} actions={<><Button variant="ghost" onClick={() => setEditingQuestion(null)}>Cancel</Button><Button type="submit" form="question-edit-form" disabled={actionStatus?.type === "pending" || Boolean(editingImageField)}>Save question</Button></>}>
+        <form id="question-edit-form" className="stack-form" onSubmit={questionForm.handleSubmit(handleQuestionUpdate)}>
+          <RichMathEditor form={questionForm} name="questionText" label="Question text" className="question-author-text" placeholder={'Write text and formulas, for example: \\(f(x)=a^x+b\\)'} rules={{ required: true, minLength: 3 }} showMathTemplates />
+          <RichMathEditor form={questionForm} name="formulaText" label="Question formula (optional)" placeholder="Formula shown with this question only" showMathTemplates />
+          {editingQuestion?.sectionType === "math" && editingQuestion.type !== "text_input" ? (
+            <MathAnswerOptionEditors
+              form={questionForm}
+              uploadingImageField={editingImageField}
+              onImageUpload={handleQuestionEditorImageUpload}
+            />
+          ) : null}
+          <div className="crm-form-row crm-form-row-three"><label className="form-field"><span>Skill</span><input {...questionForm.register("skill", { required: true, minLength: 2 })} /></label><div className="form-field"><span>Difficulty</span><PremiumSelect ariaLabel="Difficulty" value={questionForm.watch("difficulty")} onChange={(value) => questionForm.setValue("difficulty", value)} options={[{ value: "EASY", label: "Easy" }, { value: "MEDIUM", label: "Medium" }, { value: "HARD", label: "Hard" }]} /></div><label className="form-field"><span>Order</span><input type="number" min="0" {...questionForm.register("order", { required: true, min: 0 })} /></label></div>
+          <RichMathEditor
+            form={questionForm}
+            name="explanation"
+            label="Explanation / worked solution"
+            className="explanation-rich-math-editor"
+            placeholder="Explain each step and include formulas where needed."
+            rules={{ required: true, minLength: 5 }}
+            showMathTemplates={editingQuestion?.sectionType === "math"}
+          />
+          <QuestionEditorImageField
+            form={questionForm}
+            fieldName="explanationImageUrl"
+            label="Explanation image"
+            alt="Explanation image preview"
+            uploadingImageField={editingImageField}
+            onImageUpload={handleQuestionEditorImageUpload}
+          />
+          {actionStatus?.type === "error" ? <p className="support-status error">{actionStatus.message}</p> : null}
+        </form>
+      </Modal>
+
+      <ConfirmActionModal open={Boolean(confirmAction)} title={confirmAction?.title} message={confirmAction?.message} confirmLabel={confirmAction?.confirmLabel} pending={confirmPending} onCancel={() => setConfirmAction(null)} onConfirm={runConfirmAction} />
+    </Layout>
+  );
+}
+
+function MathAnswerOptionEditors({ form, uploadingImageField, onImageUpload }) {
+  const correctOption = form.watch("correctOption");
+
+  return (
+    <fieldset className="editor-panel answer-editor math-option-editors">
+      <legend>Math answer choices</legend>
+      <div className="question-options-grid with-math-options">
+        {OPTION_LABELS.map((label) => {
+          const selected = correctOption === label;
+          const imageField = `option${label}ImageUrl`;
+          return (
+            <div key={label} className={`option-author-block option-author-math ${selected ? "correct" : ""}`.trim()}>
+              <div className="option-author-heading">
+                <span>Option {label}</span>
+                <button type="button" className={selected ? "selected" : ""} onClick={() => form.setValue("correctOption", label, { shouldDirty: true })}>
+                  {selected ? "Correct answer" : "Mark correct"}
+                </button>
+              </div>
+              <RichMathEditor
+                form={form}
+                name={`option${label}`}
+                label={`Answer ${label}`}
+                className="option-rich-math-editor"
+                placeholder={`Write answer ${label} with text or formulas.`}
+                rules={{ required: true }}
+                showMathTemplates
+              />
+              <QuestionEditorImageField
+                form={form}
+                fieldName={imageField}
+                label={`Option ${label} image`}
+                alt={`Option ${label} image preview`}
+                uploadingImageField={uploadingImageField}
+                onImageUpload={onImageUpload}
+              />
+            </div>
+          );
+        })}
+      </div>
+    </fieldset>
+  );
+}
+
+function QuestionEditorImageField({ form, fieldName, label, alt, uploadingImageField, onImageUpload }) {
+  const imageUrl = form.watch(fieldName) || "";
+  const uploading = uploadingImageField === fieldName;
+
+  return (
+    <div className="question-image-file-field">
+      <label className="form-field media-upload-field">
+        <span>{label}</span>
+        <input
+          key={imageUrl || `${fieldName}-empty`}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          disabled={uploading}
+          onChange={(event) => onImageUpload(event, fieldName)}
+        />
+        <small>{uploading ? "Uploading image..." : "Choose PNG, JPG, WEBP, or GIF from this device."}</small>
+      </label>
+      {imageUrl ? (
+        <div className="builder-image-preview">
+          <QuestionImage src={imageUrl} alt={alt} />
+          <Button type="button" variant="ghost" onClick={() => form.setValue(fieldName, "", { shouldDirty: true })}>
+            Remove image
+          </Button>
+        </div>
+      ) : null}
+    </div>
   );
 }

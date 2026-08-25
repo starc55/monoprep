@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import AdminLayout from "../layouts/AdminLayout.jsx";
 import TeacherLayout from "../layouts/TeacherLayout.jsx";
 import AdminExamBuilder from "../components/admin/AdminExamBuilder.jsx";
+import AdminQuestionWorkspace from "../components/admin/AdminQuestionWorkspace.jsx";
 import Button from "../components/ui/Button.jsx";
 import Card from "../components/ui/Card.jsx";
 import Loader from "../components/ui/Loader.jsx";

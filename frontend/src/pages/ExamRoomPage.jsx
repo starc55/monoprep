@@ -142,11 +142,6 @@ export default function ExamRoomPage() {
     session?.currentQuestionIndex || 0
   );
   const showPassagePanel = currentSection?.type === "reading_writing" || currentSection?.type === "math";
-  const formulaReferenceText =
-    currentSection?.type === "math"
-      ? attempt?.exam.referenceText?.trim() || currentQuestion?.formulaText?.trim() || ""
-      : "";
-
   useEffect(() => {
     if (!lineReaderActive) return undefined;
     const moveReader = (event) => setLineReaderY(Math.max(96, Math.min(window.innerHeight - 120, event.clientY)));
@@ -407,9 +402,6 @@ export default function ExamRoomPage() {
       },
       formula: {
         title: "Formula Reference",
-        referenceText:
-          formulaReferenceText ||
-          "No formula reference has been added for this item.",
         action: "Close",
       },
     };
@@ -792,7 +784,6 @@ export default function ExamRoomPage() {
       />
       <FormulaReferenceDialog
         open={activeDialog === "formula"}
-        text={formulaReferenceText}
         onClose={() => setActiveDialog(null)}
       />
       <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />

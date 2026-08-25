@@ -1,20 +1,9 @@
 import { useRef, useState } from 'react';
 import { Grip, Maximize2, X } from 'lucide-react';
-import MathJaxContent from '../math/MathJaxContent.jsx';
+import SatMathReferenceSheet from './SatMathReferenceSheet.jsx';
 
-const defaultReferences = [
-  ['Circle', '\\(A=\\pi r^2\\)', '\\(C=2\\pi r\\)'],
-  ['Rectangle', '\\(A=lw\\)', ''],
-  ['Triangle', '\\(A=\\frac{1}{2}bh\\)', ''],
-  ['Right triangle', '\\(a^2+b^2=c^2\\)', ''],
-  ['Cylinder', '\\(V=\\pi r^2h\\)', ''],
-  ['Sphere', '\\(V=\\frac{4}{3}\\pi r^3\\)', ''],
-  ['Cone', '\\(V=\\frac{1}{3}\\pi r^2h\\)', ''],
-  ['Pyramid', '\\(V=\\frac{1}{3}lwh\\)', '']
-];
-
-export default function FormulaReferenceDialog({ open, text, onClose }) {
-  const [position, setPosition] = useState({ x: 96, y: 120 });
+export default function FormulaReferenceDialog({ open, onClose }) {
+  const [position, setPosition] = useState({ x: 12, y: 96 });
   const [expanded, setExpanded] = useState(false);
   const dragRef = useRef(null);
 
@@ -26,11 +15,12 @@ export default function FormulaReferenceDialog({ open, text, onClose }) {
     const startX = event.clientX;
     const startY = event.clientY;
     const origin = { ...position };
+    const bounds = dragRef.current?.getBoundingClientRect();
 
     function handleMove(moveEvent) {
       setPosition({
-        x: Math.max(12, origin.x + moveEvent.clientX - startX),
-        y: Math.max(12, origin.y + moveEvent.clientY - startY)
+        x: Math.min(Math.max(12, window.innerWidth - (bounds?.width || 0) - 12), Math.max(12, origin.x + moveEvent.clientX - startX)),
+        y: Math.min(Math.max(12, window.innerHeight - (bounds?.height || 0) - 12), Math.max(12, origin.y + moveEvent.clientY - startY))
       });
     }
 
@@ -59,23 +49,7 @@ export default function FormulaReferenceDialog({ open, text, onClose }) {
         </div>
       </header>
       <div className="formula-window-body">
-        {text ? (
-          <MathJaxContent block className="formula-custom-text">{text}</MathJaxContent>
-        ) : (
-          <div className="formula-reference-grid">
-            {defaultReferences.map(([title, first, second]) => (
-              <article key={title}>
-                <div className="formula-shape" aria-hidden="true" />
-                <strong>{title}</strong>
-                <MathJaxContent>{first}</MathJaxContent>
-                {second ? <MathJaxContent>{second}</MathJaxContent> : null}
-              </article>
-            ))}
-          </div>
-        )}
-        <p className="formula-footnote">
-          The number of degrees of arc in a circle is 360. The sum of the measures in degrees of the angles of a triangle is 180.
-        </p>
+        <SatMathReferenceSheet />
       </div>
     </section>
   );

@@ -4,8 +4,8 @@ import { useForm } from 'react-hook-form';
 import Button from '../ui/Button.jsx';
 import Card from '../ui/Card.jsx';
 import PremiumSelect from '../ui/PremiumSelect.jsx';
-import RichMathEditor from '../math/RichMathEditor.jsx';
 import AdminQuestionWorkspace from './AdminQuestionWorkspace.jsx';
+import QuestionWorkspaceErrorBoundary from './QuestionWorkspaceErrorBoundary.jsx';
 import { getApiErrorMessage } from '../../utils/apiError.js';
 
 const SECTION_TEMPLATES = {
@@ -41,7 +41,7 @@ const WIZARD_STEPS = ['Exam Setup', 'Modules', 'Questions'];
 
 const defaultExamValues = {
   title: '', description: '', type: 'FULL_LENGTH', totalDuration: 87,
-  source: 'MONOPREP', accessType: 'FREE', referenceText: '', isPublished: 'false',
+  source: 'MONOPREP', accessType: 'FREE', isPublished: 'false',
   competitionKind: 'NONE', competitionStartsAt: '', competitionEndsAt: ''
 };
 
@@ -146,7 +146,7 @@ export default function AdminExamBuilder({
         source: values.source,
         contentMode: 'REAL_EXAM',
         totalDuration: Number(values.totalDuration),
-        referenceText: values.referenceText?.trim() || null,
+        referenceText: null,
         isPublished: values.isPublished === 'true',
         competitionKind: values.competitionKind,
         competitionStartsAt: values.competitionKind !== 'NONE' ? new Date(values.competitionStartsAt).toISOString() : null,
@@ -232,7 +232,7 @@ export default function AdminExamBuilder({
                   <div className="form-field"><span>Source</span><PremiumSelect ariaLabel="Exam source" value={examForm.watch('source')} onChange={(value) => examForm.setValue('source', value)} options={sourceOptions} /></div>
                   <div className="form-field"><span>Access</span><PremiumSelect ariaLabel="Exam access" value={examForm.watch('accessType')} onChange={(value) => examForm.setValue('accessType', value)} options={accessOptions} /></div>
                 </div>
-                <RichMathEditor form={examForm} name="referenceText" label="Shared exam reference" placeholder="Enter the Math reference once for this exam." showMathTemplates />
+                <p className="builder-default-note">The official MonoPrep SAT Math reference sheet is included automatically in every Math module.</p>
                 <div className="form-field"><span>Competition schedule</span><PremiumSelect ariaLabel="Competition schedule" value={examForm.watch('competitionKind')} onChange={(value) => examForm.setValue('competitionKind', value)} options={competitionOptions} /></div>
                 {examForm.watch('competitionKind') !== 'NONE' ? <div className="builder-field-row"><label className="form-field"><span>Starts at</span><input type="datetime-local" {...examForm.register('competitionStartsAt')} /></label><label className="form-field"><span>Ends at</span><input type="datetime-local" {...examForm.register('competitionEndsAt')} /></label></div> : null}
                 <div className="form-field"><span>Publish status</span><PremiumSelect ariaLabel="Publish status" value={examForm.watch('isPublished')} onChange={(value) => examForm.setValue('isPublished', value)} options={publishOptions} /></div>
@@ -260,7 +260,9 @@ export default function AdminExamBuilder({
 
           {step === 2 ? (
             <div className="exam-wizard-questions">
-              <AdminQuestionWorkspace sections={activeSections} passages={passages} onCreatePassage={onCreatePassage} onCreateQuestion={onCreateQuestion} onCreateQuestionHubItem={onCreateQuestionHubItem} onUploadImage={onUploadImage} onUploadPassageFile={onUploadPassageFile} />
+              <QuestionWorkspaceErrorBoundary resetKey={`${activeExamId}:${activeSections.length}`}>
+                <AdminQuestionWorkspace sections={activeSections} passages={passages} onCreatePassage={onCreatePassage} onCreateQuestion={onCreateQuestion} onCreateQuestionHubItem={onCreateQuestionHubItem} onUploadImage={onUploadImage} onUploadPassageFile={onUploadPassageFile} />
+              </QuestionWorkspaceErrorBoundary>
               <div className="exam-wizard-actions"><Button variant="ghost" onClick={() => setStep(1)}><ChevronLeft aria-hidden="true" /> Modules</Button><Button onClick={() => setWizardOpen(false)}>Finish</Button></div>
             </div>
           ) : null}

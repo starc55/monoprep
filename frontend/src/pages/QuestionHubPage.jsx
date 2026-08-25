@@ -538,7 +538,7 @@ export default function QuestionHubPage() {
             </Button>
           </footer>
         </section>
-        <FormulaReferenceDialog open={referenceOpen} text={activeItem.formulaText} onClose={() => setReferenceOpen(false)} />
+        <FormulaReferenceDialog open={referenceOpen} onClose={() => setReferenceOpen(false)} />
         <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
       </AppLayout>
     );

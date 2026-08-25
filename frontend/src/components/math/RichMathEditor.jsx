@@ -36,7 +36,7 @@ function removeMathField(mathField) {
   const nextSibling = mathField.nextSibling;
   const insertionIndex = Array.from(parent.childNodes).indexOf(mathField);
   mathField.remove();
-  if (nextSibling?.nodeType === Node.TEXT_NODE && nextSibling.nodeValue === ' ') {
+  if (nextSibling?.nodeType === 3 && nextSibling.nodeValue === ' ') {
     nextSibling.remove();
   }
 
@@ -50,7 +50,7 @@ function removeMathField(mathField) {
 }
 
 function createMathField(latex, display, onInput) {
-  const mathField = new MathfieldElement();
+  const mathField = document.createElement('math-field');
   mathField.className = 'rich-math-token';
   mathField.dataset.display = display ? 'block' : 'inline';
   mathField.value = latex;
@@ -99,11 +99,11 @@ function hydrateEditor(editor, source, onInput) {
 }
 
 function serializeNode(node) {
-  if (node.nodeType === Node.TEXT_NODE) {
+  if (node.nodeType === 3) {
     return (node.nodeValue || '').replaceAll('\u00a0', ' ');
   }
 
-  if (node.nodeType !== Node.ELEMENT_NODE) return '';
+  if (node.nodeType !== 1) return '';
 
   const element = node;
   if (element.tagName === 'MATH-FIELD') {
@@ -236,7 +236,7 @@ export default function RichMathEditor({
     let candidate = null;
     let whitespaceNode = null;
 
-    if (container.nodeType === Node.TEXT_NODE) {
+    if (container.nodeType === 3) {
       const valueBeforeCaret = container.nodeValue.slice(0, offset);
       const valueAfterCaret = container.nodeValue.slice(offset);
       const atFormulaBoundary = backwards
@@ -251,7 +251,7 @@ export default function RichMathEditor({
         : container.childNodes[offset];
     }
 
-    if (candidate?.nodeType === Node.TEXT_NODE && candidate.nodeValue.trim() === '') {
+    if (candidate?.nodeType === 3 && candidate.nodeValue.trim() === '') {
       whitespaceNode = candidate;
       candidate = backwards ? candidate.previousSibling : candidate.nextSibling;
     }

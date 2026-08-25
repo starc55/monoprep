@@ -314,9 +314,9 @@
   position: fixed;
   left: 0;
   top: 0;
-  z-index: 44;
-  width: min(540px, calc(100vw - 24px));
-  max-height: min(72vh, 620px);
+  z-index: 220;
+  width: min(900px, calc(100vw - 24px));
+  max-height: min(78vh, 720px);
   display: grid;
   grid-template-rows: auto 1fr;
   border: 1px solid #ccd3df;
@@ -362,37 +362,107 @@
 
 .formula-window-body {
   overflow: auto;
-  padding: 1.1rem;
+  padding: 0;
 }
 
 .formula-reference-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 0.8rem;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid #d9e0ea;
+  border-radius: 8px;
+  background: #fff;
 }
 
 .formula-reference-grid article {
   display: grid;
   justify-items: center;
-  gap: 0.25rem;
-  min-height: 118px;
-  padding: 0.65rem;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
+  align-content: start;
+  gap: 0.2rem;
+  min-height: 154px;
+  padding: 0.7rem 0.45rem;
+  border-right: 1px solid #d9e0ea;
+  border-bottom: 1px solid #d9e0ea;
+  border-radius: 0;
+  background: #fff;
   text-align: center;
 }
 
-.formula-shape {
-  width: 46px;
-  height: 32px;
-  border: 2px solid #111;
-  border-radius: 50%;
+.formula-reference-grid article svg {
+  width: 100%;
+  height: 78px;
+  color: #111827;
 }
 
-.formula-custom-text,
+.formula-reference-grid article strong {
+  color: #0b1f45;
+  font-size: 0.72rem;
+  line-height: 1.2;
+}
+
+.formula-reference-grid article .mathjax-content {
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+.sat-reference-label {
+  fill: currentColor;
+  stroke: none;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.sat-reference-sheet {
+  padding: 1rem;
+  color: #111827;
+  background:
+    linear-gradient(rgba(36, 94, 234, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(36, 94, 234, 0.035) 1px, transparent 1px),
+    #fbfdff;
+  background-size: 24px 24px;
+}
+
+.sat-reference-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.sat-reference-heading span {
+  padding: 0.35rem 0.65rem;
+  color: #fff;
+  background: #07152f;
+  font-size: 0.72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.sat-reference-heading p {
+  margin: 0;
+  color: #64748b;
+  font-size: 0.72rem;
+}
+
 .formula-footnote {
-  white-space: pre-wrap;
-  line-height: 1.55;
+  display: grid;
+  gap: 0.24rem;
+  margin-top: 0.8rem;
+  padding: 0.75rem 0.85rem;
+  border-left: 3px solid #245eea;
+  background: rgba(255, 255, 255, 0.9);
+}
+
+.formula-footnote p,
+.formula-footnote .mathjax-content {
+  margin: 0;
+  color: #334155;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .mathjax-content {
@@ -484,6 +554,15 @@
 
   .formula-reference-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .formula-window {
+    width: calc(100vw - 16px);
+  }
+
+  .sat-reference-heading {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 

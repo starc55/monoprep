@@ -14,6 +14,7 @@ import PremiumSelect from "../components/ui/PremiumSelect.jsx";
 import RowActionMenu from "../components/ui/RowActionMenu.jsx";
 import MathJaxContent, { stripRichTextMarkup } from "../components/math/MathJaxContent.jsx";
 import RichMathEditor from "../components/math/RichMathEditor.jsx";
+import QuestionWorkspaceErrorBoundary from "../components/admin/QuestionWorkspaceErrorBoundary.jsx";
 import QuestionImage from "../components/exam/renderers/QuestionImage.jsx";
 import { getApiErrorMessage } from "../utils/apiError.js";
 import "../styles/pages/teacher-exams.css";
@@ -83,7 +84,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
     defaultValues: {
       title: "", description: "", type: "FULL_LENGTH", accessType: "FREE", source: "MONOPREP",
       contentMode: "REAL_EXAM", competitionKind: "NONE", competitionStartsAt: "",
-      competitionEndsAt: "", referenceText: "", totalDuration: 87, isPublished: "false",
+      competitionEndsAt: "", totalDuration: 87, isPublished: "false",
     },
   });
   const questionForm = useForm({
@@ -137,7 +138,6 @@ export default function AdminExamsPage({ mode = "admin" }) {
       competitionKind: exam.competitionKind || "NONE",
       competitionStartsAt: toDateTimeLocal(exam.competitionStartsAt),
       competitionEndsAt: toDateTimeLocal(exam.competitionEndsAt),
-      referenceText: exam.referenceText || "",
       totalDuration: exam.totalDuration || 87,
       isPublished: String(exam.isPublished),
     });
@@ -177,7 +177,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
         competitionKind: values.contentMode === "REAL_EXAM" ? values.competitionKind : "NONE",
         competitionStartsAt: values.contentMode === "REAL_EXAM" && values.competitionKind !== "NONE" ? new Date(values.competitionStartsAt).toISOString() : null,
         competitionEndsAt: values.contentMode === "REAL_EXAM" && values.competitionKind !== "NONE" ? new Date(values.competitionEndsAt).toISOString() : null,
-        referenceText: values.contentMode === "REAL_EXAM" ? values.referenceText?.trim() || null : null,
+        referenceText: null,
         totalDuration: values.contentMode === "QUESTION_HUB" ? 1 : Number(values.totalDuration),
         isPublished: values.isPublished === "true",
       });
@@ -371,15 +371,17 @@ export default function AdminExamsPage({ mode = "admin" }) {
 
       <Modal open={Boolean(authoringSection)} title="Add question" className="modal-card-wide question-authoring-modal" onClose={() => setAuthoringSection(null)} actions={<Button variant="ghost" onClick={() => setAuthoringSection(null)}>Close</Button>}>
         {authoringSection ? (
-          <AdminQuestionWorkspace
-            sections={[authoringSection]}
-            passages={passages}
-            onCreatePassage={async (payload) => { const passage = await createPassage(payload); await load(); return passage; }}
-            onCreateQuestion={async (payload) => { const question = await createQuestion(payload); await load(); setAuthoringSection((current) => current ? { ...current, questionsCount: (current.questionsCount || 0) + 1 } : current); return question; }}
-            onCreateQuestionHubItem={createQuestionBankItem}
-            onUploadImage={uploadQuestionImage}
-            onUploadPassageFile={uploadPassageFile}
-          />
+          <QuestionWorkspaceErrorBoundary resetKey={authoringSection.id}>
+            <AdminQuestionWorkspace
+              sections={[authoringSection]}
+              passages={passages}
+              onCreatePassage={async (payload) => { const passage = await createPassage(payload); await load(); return passage; }}
+              onCreateQuestion={async (payload) => { const question = await createQuestion(payload); await load(); setAuthoringSection((current) => current ? { ...current, questionsCount: (current.questionsCount || 0) + 1 } : current); return question; }}
+              onCreateQuestionHubItem={createQuestionBankItem}
+              onUploadImage={uploadQuestionImage}
+              onUploadPassageFile={uploadPassageFile}
+            />
+          </QuestionWorkspaceErrorBoundary>
         ) : null}
       </Modal>
 
@@ -387,7 +389,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
         <form id="exam-edit-form" className="stack-form" onSubmit={examForm.handleSubmit(handleExamUpdate)}>
           <div className="crm-form-row"><label className="form-field"><span>Title</span><input {...examForm.register("title", { required: true, minLength: 3 })} /></label>{examForm.watch("contentMode") === "REAL_EXAM" ? <label className="form-field"><span>Total minutes</span><input type="number" min="1" {...examForm.register("totalDuration", { required: true, min: 1 })} /></label> : null}</div>
           <label className="form-field"><span>Description</span><textarea {...examForm.register("description", { required: true, minLength: 10 })} /></label>
-          {examForm.watch("contentMode") === "REAL_EXAM" ? <><div className="crm-form-row crm-form-row-three"><div className="form-field"><span>Source</span><PremiumSelect ariaLabel="Exam source" value={examForm.watch("source")} onChange={(value) => examForm.setValue("source", value)} options={sourceOptions} /></div><div className="form-field"><span>Type</span><PremiumSelect ariaLabel="Exam type" value={examForm.watch("type")} onChange={(value) => examForm.setValue("type", value)} options={[{ value: "FULL_LENGTH", label: "Full Length SAT" }, { value: "PRACTICE", label: "Practice Exam" }, { value: "CUSTOM", label: "Custom Practice" }]} /></div><div className="form-field"><span>Access</span><PremiumSelect ariaLabel="Exam access" value={examForm.watch("accessType")} onChange={(value) => examForm.setValue("accessType", value)} options={[{ value: "FREE", label: "Free" }, { value: "PAID", label: "Premium" }]} /></div></div><RichMathEditor form={examForm} name="referenceText" label="Shared exam reference" placeholder="This reference is entered once and appears throughout Math sections." showMathTemplates /><div className="form-field"><span>Competition</span><PremiumSelect ariaLabel="Competition" value={examForm.watch("competitionKind")} onChange={(value) => examForm.setValue("competitionKind", value)} options={[{ value: "NONE", label: "Regular practice exam" }, { value: "FULL", label: "Monthly full competition" }, { value: "MATH", label: "Biweekly math competition" }, { value: "ENGLISH", label: "Biweekly English competition" }]} /></div>{examForm.watch("competitionKind") !== "NONE" ? <div className="crm-form-row"><label className="form-field"><span>Starts at</span><input type="datetime-local" required {...examForm.register("competitionStartsAt")} /></label><label className="form-field"><span>Ends at</span><input type="datetime-local" required {...examForm.register("competitionEndsAt")} /></label></div> : null}</> : <p className="builder-default-note">Question Hub content remains free and does not use exam source, access, modules, or competition scheduling.</p>}
+          {examForm.watch("contentMode") === "REAL_EXAM" ? <><div className="crm-form-row crm-form-row-three"><div className="form-field"><span>Source</span><PremiumSelect ariaLabel="Exam source" value={examForm.watch("source")} onChange={(value) => examForm.setValue("source", value)} options={sourceOptions} /></div><div className="form-field"><span>Type</span><PremiumSelect ariaLabel="Exam type" value={examForm.watch("type")} onChange={(value) => examForm.setValue("type", value)} options={[{ value: "FULL_LENGTH", label: "Full Length SAT" }, { value: "PRACTICE", label: "Practice Exam" }, { value: "CUSTOM", label: "Custom Practice" }]} /></div><div className="form-field"><span>Access</span><PremiumSelect ariaLabel="Exam access" value={examForm.watch("accessType")} onChange={(value) => examForm.setValue("accessType", value)} options={[{ value: "FREE", label: "Free" }, { value: "PAID", label: "Premium" }]} /></div></div><p className="builder-default-note">The official MonoPrep SAT Math reference sheet is included automatically in every Math module.</p><div className="form-field"><span>Competition</span><PremiumSelect ariaLabel="Competition" value={examForm.watch("competitionKind")} onChange={(value) => examForm.setValue("competitionKind", value)} options={[{ value: "NONE", label: "Regular practice exam" }, { value: "FULL", label: "Monthly full competition" }, { value: "MATH", label: "Biweekly math competition" }, { value: "ENGLISH", label: "Biweekly English competition" }]} /></div>{examForm.watch("competitionKind") !== "NONE" ? <div className="crm-form-row"><label className="form-field"><span>Starts at</span><input type="datetime-local" required {...examForm.register("competitionStartsAt")} /></label><label className="form-field"><span>Ends at</span><input type="datetime-local" required {...examForm.register("competitionEndsAt")} /></label></div> : null}</> : <p className="builder-default-note">Question Hub content remains free and does not use exam source, access, modules, or competition scheduling.</p>}
           <div className="form-field"><span>Status</span><PremiumSelect ariaLabel="Exam status" value={examForm.watch("isPublished")} onChange={(value) => examForm.setValue("isPublished", value)} options={[{ value: "false", label: "Draft" }, { value: "true", label: "Published" }]} /></div>
           {actionStatus?.type === "error" ? <p className="support-status error">{actionStatus.message}</p> : null}
         </form>

@@ -14348,6 +14348,23 @@ select:not([multiple]) option {
   overflow: visible;
 }
 
+.question-editor-recovery {
+  min-height: 280px;
+  align-content: center;
+  justify-items: center;
+  text-align: center;
+}
+
+.question-editor-recovery .button {
+  margin-top: 8px;
+}
+
+.passage-author-text.rich-math-editor,
+.passage-edit-content.rich-math-editor {
+  min-height: min(38vh, 320px);
+  white-space: pre-wrap;
+}
+
 .field-error-message {
   color: #b42318;
   font-size: 0.7rem;

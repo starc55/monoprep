@@ -111,7 +111,7 @@ function parseTableData(value) {
   return JSON.parse(value);
 }
 
-function buildOptions(values) {
+function buildOptions(values = {}) {
   return ['A', 'B', 'C', 'D']
     .map((label, index) => ({
       label,
@@ -166,7 +166,8 @@ export default function AdminQuestionWorkspace({
     || visibleSections[0]
     || sections[0];
   const form = useForm({ defaultValues: getDefaults(activeSection) });
-  const values = useWatch({ control: form.control });
+  const watchedValues = useWatch({ control: form.control });
+  const values = watchedValues || getDefaults(activeSection);
   const sectionType = activeSection?.type;
   const responseType = sectionType === 'reading_writing'
     ? 'single_choice'
@@ -667,10 +668,14 @@ function ReadingFields({ form, values, passages, uploadingPassageFile, onPassage
               <span>Category</span>
               <input {...form.register('passageCategory', { required: true, minLength: 2 })} />
             </label>
-            <label className="form-field">
-              <span>Passage content</span>
-              <textarea className="passage-author-text" placeholder="Optional when a passage file is attached" {...form.register('passageContent')} />
-            </label>
+            <RichMathEditor
+              form={form}
+              name="passageContent"
+              label="Passage content"
+              className="passage-author-text"
+              placeholder="Write the passage, then select text to apply italic or underline. Optional when a file is attached."
+              showMathTemplates={false}
+            />
             <div className="form-field">
               <span>Passage material</span>
               <label className="passage-file-picker">

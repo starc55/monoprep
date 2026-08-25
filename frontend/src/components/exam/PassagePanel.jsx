@@ -26,11 +26,44 @@ function writeHighlights(key, highlights) {
 
 function tokenize(content) {
   let wordIndex = 0;
-  return content.split(/(\s+)/).map((token, index) => {
-    const isSpace = /^\s+$/.test(token);
-    const currentIndex = isSpace ? null : wordIndex++;
-    return { token, key: `${index}-${token}`, wordIndex: currentIndex, isSpace };
+  let italic = false;
+  let underline = false;
+  let tokenIndex = 0;
+  const output = [];
+
+  String(content || '').split(/(<\/?(?:em|i|u)>)/gi).filter(Boolean).forEach((part) => {
+    const tag = part.toLowerCase();
+    if (tag === '<em>' || tag === '<i>') {
+      italic = true;
+      return;
+    }
+    if (tag === '</em>' || tag === '</i>') {
+      italic = false;
+      return;
+    }
+    if (tag === '<u>') {
+      underline = true;
+      return;
+    }
+    if (tag === '</u>') {
+      underline = false;
+      return;
+    }
+
+    part.split(/(\s+)/).filter(Boolean).forEach((token) => {
+      const isSpace = /^\s+$/.test(token);
+      output.push({
+        token,
+        key: `${tokenIndex++}-${token}`,
+        wordIndex: isSpace ? null : wordIndex++,
+        isSpace,
+        italic,
+        underline
+      });
+    });
   });
+
+  return output;
 }
 
 function findHighlight(highlights, wordIndex) {
@@ -165,9 +198,12 @@ export default function PassagePanel({ question, attemptId, sectionType }) {
       <div className="passage-content highlightable-passage" ref={panelRef} onMouseUp={handleMouseUp}>
         {question.passage.content ? (
           <p>
-            {tokens.map(({ token, key, wordIndex, isSpace }) => {
+            {tokens.map(({ token, key, wordIndex, isSpace, italic, underline }) => {
               if (isSpace) return token;
               const highlight = findHighlight(highlights, wordIndex);
+              let formattedToken = token;
+              if (underline) formattedToken = <u>{formattedToken}</u>;
+              if (italic) formattedToken = <em>{formattedToken}</em>;
               return (
                 <span
                   key={key}
@@ -175,7 +211,7 @@ export default function PassagePanel({ question, attemptId, sectionType }) {
                   className={highlight ? 'highlighted-token' : ''}
                   style={highlight ? { backgroundColor: highlight.color } : undefined}
                 >
-                  {token}
+                  {formattedToken}
                 </span>
               );
             })}

@@ -10,6 +10,8 @@ import Modal from "../components/ui/Modal.jsx";
 import ConfirmActionModal from "../components/ui/ConfirmActionModal.jsx";
 import RowActionMenu from "../components/ui/RowActionMenu.jsx";
 import PassageAssetViewer from "../components/exam/PassageAssetViewer.jsx";
+import RichMathEditor from "../components/math/RichMathEditor.jsx";
+import MathJaxContent, { stripRichTextMarkup } from "../components/math/MathJaxContent.jsx";
 import {
   createPassage,
   deletePassage,
@@ -22,7 +24,8 @@ import { getApiErrorMessage } from "../utils/apiError.js";
 const defaults = { title: "", category: "reading", content: "" };
 
 function wordCount(content = "") {
-  return content.trim() ? content.trim().split(/\s+/).length : 0;
+  const text = stripRichTextMarkup(content).trim();
+  return text ? text.split(/\s+/).length : 0;
 }
 
 export default function AdminPassagesPage() {
@@ -132,7 +135,7 @@ export default function AdminPassagesPage() {
               <tbody>
                 {passages.map((passage) => (
                   <tr key={passage.id}>
-                    <td data-label="Passage"><div className="table-primary-cell"><BookOpen aria-hidden="true" /><span><strong>{passage.title}</strong><small>{passage.content.slice(0, 90)}{passage.content.length > 90 ? "..." : ""}</small></span></div></td>
+                    <td data-label="Passage"><div className="table-primary-cell"><BookOpen aria-hidden="true" /><span><strong>{passage.title}</strong><small>{stripRichTextMarkup(passage.content).slice(0, 90)}{stripRichTextMarkup(passage.content).length > 90 ? "..." : ""}</small></span></div></td>
                     <td data-label="Category"><span className="table-status neutral">{passage.category}</span></td>
                     <td data-label="File">{passage.attachmentUrl ? <a className="passage-file-link compact" href={passage.attachmentUrl} target="_blank" rel="noreferrer"><Paperclip aria-hidden="true" /> {passage.attachmentName || "Document"}</a> : <span className="table-muted">None</span>}</td>
                     <td data-label="Words">{wordCount(passage.content)}</td>
@@ -174,7 +177,14 @@ export default function AdminPassagesPage() {
             <label className="form-field"><span>Title</span><input {...form.register("title", { required: true, minLength: 2 })} /></label>
             <label className="form-field"><span>Category</span><input {...form.register("category", { required: true, minLength: 2 })} /></label>
           </div>
-          <label className="form-field"><span>Content</span><textarea className="passage-edit-content" placeholder="Optional when a passage file is attached" {...form.register("content")} /></label>
+          <RichMathEditor
+            form={form}
+            name="content"
+            label="Content"
+            className="passage-edit-content"
+            placeholder="Write the passage, then select text to apply italic or underline. Optional when a file is attached."
+            showMathTemplates={false}
+          />
           <div className="form-field">
             <span>Passage material</span>
             <label className="passage-file-picker">
@@ -204,7 +214,7 @@ export default function AdminPassagesPage() {
       </Modal>
 
       <Modal open={dialog?.mode === "view"} title={dialog?.passage?.title || "Passage"} className="modal-card-wide" onClose={() => setDialog(null)} actions={<Button variant="ghost" onClick={() => setDialog(null)}>Close</Button>}>
-        {dialog?.passage ? <div className="passage-preview"><span className="pill">{dialog.passage.category}</span>{dialog.passage.content ? <p>{dialog.passage.content}</p> : null}<PassageAssetViewer passage={dialog.passage} /></div> : null}
+        {dialog?.passage ? <div className="passage-preview"><span className="pill">{dialog.passage.category}</span>{dialog.passage.content ? <MathJaxContent block>{dialog.passage.content}</MathJaxContent> : null}<PassageAssetViewer passage={dialog.passage} /></div> : null}
       </Modal>
 
       <ConfirmActionModal open={Boolean(confirmAction)} title={confirmAction?.title} message={confirmAction?.message} confirmLabel={confirmAction?.confirmLabel} pending={confirmPending} onCancel={() => setConfirmAction(null)} onConfirm={runConfirmAction} />

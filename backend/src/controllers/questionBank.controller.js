@@ -1,6 +1,8 @@
 import { prisma } from '../config/prisma.js';
 import { ApiError } from '../utils/apiError.js';
 
+const QUESTION_COPY_ID_PREFIX = 'question_copy_';
+
 const domainAliases = [
   {
     subject: 'Math',
@@ -46,6 +48,9 @@ const domainAliases = [
 
 function cleanQuestionBankPayload(payload) {
   return {
+    ...(payload.sourceQuestionId
+      ? { id: `${QUESTION_COPY_ID_PREFIX}${payload.sourceQuestionId}` }
+      : {}),
     subject: payload.subject,
     domain: payload.domain,
     skill: payload.skill,
@@ -95,6 +100,9 @@ function mapExamQuestionToHubItem(exam, section, question) {
     prompt: question.questionText,
     passage: question.passage?.content || null,
     passageTitle: question.passage?.title || null,
+    passageAttachmentUrl: question.passage?.attachmentUrl || null,
+    passageAttachmentName: question.passage?.attachmentName || null,
+    passageAttachmentMimeType: question.passage?.attachmentMimeType || null,
     questionType: question.type,
     imageUrl: question.imageUrl,
     formulaText: question.formulaText,
@@ -155,10 +163,56 @@ export async function listQuestionBankItems(req, res) {
     })
   ]);
 
+  const linkedQuestionIds = adminItems
+    .map((item) => item.id.startsWith(QUESTION_COPY_ID_PREFIX)
+      ? item.id.slice(QUESTION_COPY_ID_PREFIX.length)
+      : null)
+    .filter(Boolean);
+  const legacyPrompts = adminItems
+    .filter((item) => !item.id.startsWith(QUESTION_COPY_ID_PREFIX))
+    .map((item) => item.prompt);
+  const linkedQuestions = adminItems.length
+    ? await prisma.question.findMany({
+        where: {
+          passageId: { not: null },
+          OR: [
+            ...(linkedQuestionIds.length ? [{ id: { in: linkedQuestionIds } }] : []),
+            ...(legacyPrompts.length ? [{ questionText: { in: [...new Set(legacyPrompts)] } }] : [])
+          ]
+        },
+        include: { passage: true },
+        orderBy: { createdAt: 'desc' }
+      })
+    : [];
+  const passageByPrompt = new Map(
+    linkedQuestions
+      .filter((question) => question.passage)
+      .map((question) => [question.questionText, question.passage])
+  );
+  const passageByQuestionId = new Map(
+    linkedQuestions
+      .filter((question) => question.passage)
+      .map((question) => [question.id, question.passage])
+  );
+  const enrichedAdminItems = adminItems.map((item) => {
+    const sourceQuestionId = item.id.startsWith(QUESTION_COPY_ID_PREFIX)
+      ? item.id.slice(QUESTION_COPY_ID_PREFIX.length)
+      : null;
+    const passage = (sourceQuestionId && passageByQuestionId.get(sourceQuestionId))
+      || passageByPrompt.get(item.prompt);
+    return {
+      ...item,
+      passage: passage?.content || null,
+      passageTitle: passage?.title || null,
+      passageAttachmentUrl: passage?.attachmentUrl || null,
+      passageAttachmentName: passage?.attachmentName || null,
+      passageAttachmentMimeType: passage?.attachmentMimeType || null
+    };
+  });
   const examItems = exams.flatMap((exam) => exam.sections.flatMap((section) => (
     section.questions.map((question) => mapExamQuestionToHubItem(exam, section, question))
   )));
-  const items = [...adminItems, ...examItems].filter((item) => matchesFilters(item, req.query));
+  const items = [...enrichedAdminItems, ...examItems].filter((item) => matchesFilters(item, req.query));
 
   res.json({ items });
 }
@@ -197,9 +251,15 @@ export async function upsertQuestionHubProgress(req, res) {
 }
 
 export async function createQuestionBankItem(req, res) {
-  const item = await prisma.questionBankItem.create({
-    data: cleanQuestionBankPayload(req.body)
-  });
+  const data = cleanQuestionBankPayload(req.body);
+  const { id: copyId, ...copyData } = data;
+  const item = req.body.sourceQuestionId
+    ? await prisma.questionBankItem.upsert({
+        where: { id: copyId },
+        create: data,
+        update: copyData
+      })
+    : await prisma.questionBankItem.create({ data });
 
   res.status(201).json({ item });
 }

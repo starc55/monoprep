@@ -376,17 +376,25 @@ export default function PracticePage() {
       user?.hasPremiumAccess
   );
   const examRows = useMemo(
-    () =>
-      exams.map((exam, index) => {
+    () => {
+      const chronologicalIds = [...exams]
+        .sort((left, right) => {
+          const dateDifference = new Date(left.createdAt || 0).getTime() - new Date(right.createdAt || 0).getTime();
+          return dateDifference || String(left.id).localeCompare(String(right.id));
+        })
+        .map((exam) => exam.id);
+      const paperNumberById = new Map(chronologicalIds.map((id, index) => [id, index + 1]));
+      return exams.map((exam, index) => {
         const examAttempts = getExamAttempts(attempts, exam.id);
         return {
           exam,
           ...examAttempts,
           premium: isPremiumExam(exam),
           newest: index < 3,
-          paperNumber: Math.max(1, 85 - index),
+          paperNumber: paperNumberById.get(exam.id) || index + 1,
         };
-      }),
+      });
+    },
     [attempts, exams]
   );
 

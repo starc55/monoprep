@@ -15,14 +15,19 @@ export default function ExamInstructionsPage() {
   const initializeSession = useExamStore((state) => state.initializeSession);
   const [exam, setExam] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
 
   useEffect(() => {
+    setLoadError("");
     getExam(examId)
       .then(setExam)
-      .catch(() => setExam(null))
+      .catch((error) => {
+        setExam(null);
+        setLoadError(error.response?.data?.message || "This exam is not available right now.");
+      })
       .finally(() => setLoading(false));
   }, [examId]);
 
@@ -69,7 +74,7 @@ export default function ExamInstructionsPage() {
         title="Exam Instructions"
         subtitle="The selected exam could not be loaded."
       >
-        <EmptyState title="Exam unavailable" message="Please return to the practice library and choose another exam." actionLabel="Back to practice" actionTo="/practice" />
+        <EmptyState title="Exam unavailable" message={loadError || "Please return to the practice library and choose another exam."} actionLabel="Back to practice" actionTo="/practice" />
       </AppLayout>
     );
   }

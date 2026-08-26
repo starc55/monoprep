@@ -14,12 +14,14 @@ export default function QuestionRenderer({
   onToggleEliminated,
   preview = false,
 }) {
+  const [eliminateMode, setEliminateMode] = useState(false);
   const rendererProps = {
     question,
     value,
     onChange,
     eliminatedValues,
     onToggleEliminated,
+    eliminateMode,
   };
 
   function renderQuestion() {
@@ -62,8 +64,15 @@ export default function QuestionRenderer({
             {markedForReview ? "Marked for Review" : "Mark for Review"}
           </button>
         )}
+        {!preview && question.type !== "text_input" && question.options?.length ? (
+          <button type="button" className={`answer-elimination-toggle ${eliminateMode ? "active" : ""}`.trim()} aria-pressed={eliminateMode} onClick={() => setEliminateMode((value) => !value)}>
+            <span aria-hidden="true">ABC</span>
+            {eliminateMode ? "Hide eliminator" : "Eliminate choices"}
+          </button>
+        ) : null}
       </div>
       {renderQuestion()}
     </div>
   );
 }
+import { useState } from "react";

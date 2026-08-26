@@ -27,4 +27,24 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const request = error.config;
+    if (error.response?.status !== 401 || !request || request._authRetry) {
+      return Promise.reject(error);
+    }
+
+    request._authRetry = true;
+    const { data, error: refreshError } = await supabase.auth.refreshSession();
+    if (refreshError || !data.session?.access_token) {
+      return Promise.reject(error);
+    }
+
+    request.headers = request.headers || {};
+    request.headers.Authorization = `Bearer ${data.session.access_token}`;
+    return api(request);
+  }
+);
+
 export default api;

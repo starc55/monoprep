@@ -7064,6 +7064,220 @@ textarea {
   background: transparent;
   box-shadow: none !important;
 }
+
+/* Exam authoring and Question Hub interaction refinements. */
+.mathjax-content ul,
+.mathjax-content ol,
+.rich-math-editor ul,
+.rich-math-editor ol {
+  margin: 0.45rem 0 0.45rem 1.25rem;
+  padding: 0;
+}
+
+.mathjax-content li,
+.rich-math-editor li {
+  margin: 0.2rem 0;
+}
+
+.exam-content-view {
+  display: grid;
+  gap: 14px;
+}
+
+.exam-content-sections,
+.exam-content-question-list {
+  display: grid;
+  gap: 10px;
+}
+
+.exam-content-section {
+  overflow: hidden;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.exam-content-section > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 13px;
+  border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+  background: #fff;
+}
+
+.exam-content-section > header span,
+.admin-question-passage header span {
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.exam-content-section > header h3,
+.admin-question-passage h4 {
+  margin: 2px 0 0;
+  color: #07152f;
+}
+
+.exam-content-question-list {
+  padding: 10px;
+}
+
+.admin-question-preview {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.admin-question-preview.compact {
+  padding: 11px;
+}
+
+.admin-question-passage {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  border-left: 3px solid #245eea;
+  background: #f4f7ff;
+}
+
+.preview-accepted-answers {
+  margin: 0;
+  padding: 9px 11px;
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+}
+
+.question-answer-mode-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid rgba(15, 23, 42, 0.1);
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.question-answer-mode-toggle > span {
+  width: 34px;
+  height: 20px;
+  border-radius: 999px;
+  background: #cbd5e1;
+  box-shadow: inset 0 0 0 2px #fff;
+}
+
+.question-answer-mode-toggle:has(input:checked) > span {
+  background: #245eea;
+}
+
+.question-answer-mode-toggle input {
+  position: absolute;
+  opacity: 0;
+}
+
+.question-answer-mode-toggle div {
+  display: grid;
+}
+
+.question-answer-mode-toggle small {
+  color: #64748b;
+}
+
+.qhub-exam-choices button.selected,
+.qhub-exam-choices button.correct,
+.qhub-exam-choices button.incorrect {
+  color: #111827;
+  background: #fff;
+}
+
+.qhub-exam-choices button.selected {
+  border-color: #245eea;
+  box-shadow: inset 0 0 0 1px #245eea;
+}
+
+.qhub-exam-choices button.correct {
+  border-color: #16a34a;
+  box-shadow: inset 0 0 0 1px #16a34a;
+}
+
+.qhub-exam-choices button.incorrect {
+  border-color: #dc2626;
+  box-shadow: inset 0 0 0 1px #dc2626;
+}
+
+.qhub-explanation-tip {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid #245eea;
+  border-radius: 8px;
+  background: #eff6ff;
+  color: #0f172a;
+  box-shadow: 0 12px 28px rgba(37, 99, 235, 0.1);
+}
+
+.qhub-explanation-tip > div {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.qhub-explanation-tip > div > span {
+  display: grid;
+}
+
+.qhub-passage-panel .passage-asset-viewer {
+  margin-bottom: 12px;
+}
+
+.support-floating-button {
+  width: 42px;
+  min-width: 42px;
+  height: 42px;
+  min-height: 42px;
+  padding: 0;
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24), 0 0 0 4px rgba(37, 99, 235, 0.07);
+}
+
+.support-floating-button span {
+  display: none;
+}
+
+.practice-toolbar,
+.practice-tabs {
+  gap: 6px;
+}
+
+.practice-tabs button,
+.practice-source-filter button {
+  min-height: 34px;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+}
+
+.practice-sort {
+  min-width: 210px;
+  padding: 3px 5px 3px 9px;
+  border-radius: 10px;
+}
+
+.practice-sort .premium-select-trigger {
+  min-height: 34px;
+  border-radius: 7px;
+}
+
+@media (max-width: 720px) {
+  .exam-content-section > header {
+    align-items: flex-start;
+  }
+}
 .settings-select-line .premium-select {
   width: 100%;
   min-width: 0;
@@ -16978,6 +17192,10 @@ textarea {
   border-color: #245eea;
   background: #f4f7ff;
   box-shadow: inset 0 0 0 1px #245eea;
+}
+
+.highlightable-passage p {
+  white-space: pre-wrap;
 }
 
 @media (max-width: 980px) {

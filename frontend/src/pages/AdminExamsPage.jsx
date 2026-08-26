@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useState } from "react";
-import { ChevronDown, Eye, FileQuestion, Pencil, Plus, Trash2 } from "lucide-react";
+import { ChevronDown, Eye, FileQuestion, FileText, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
 import { useForm } from "react-hook-form";
 import AdminLayout from "../layouts/AdminLayout.jsx";
 import TeacherLayout from "../layouts/TeacherLayout.jsx";
@@ -17,12 +17,13 @@ import MathJaxContent, { stripRichTextMarkup } from "../components/math/MathJaxC
 import RichMathEditor from "../components/math/RichMathEditor.jsx";
 import QuestionWorkspaceErrorBoundary from "../components/admin/QuestionWorkspaceErrorBoundary.jsx";
 import QuestionImage from "../components/exam/renderers/QuestionImage.jsx";
+import PassageAssetViewer from "../components/exam/PassageAssetViewer.jsx";
 import { getApiErrorMessage } from "../utils/apiError.js";
 import "../styles/pages/teacher-exams.css";
 import {
   createExam, createPassage, createQuestion, createSection, deleteExam, deleteQuestion,
   deleteSection, getExam, getExams, getPassages, updateExam, updateQuestion,
-  updateSection, uploadPassageFile, uploadQuestionImage,
+  updatePassage, updateSection, uploadPassageFile, uploadQuestionImage,
 } from "../services/examService.js";
 import { createQuestionBankItem } from "../services/questionBankService.js";
 
@@ -73,12 +74,14 @@ export default function AdminExamsPage({ mode = "admin" }) {
   const [editingExam, setEditingExam] = useState(null);
   const [editingQuestion, setEditingQuestion] = useState(null);
   const [viewingExam, setViewingExam] = useState(null);
+  const [viewingExamLoading, setViewingExamLoading] = useState(false);
   const [viewingQuestion, setViewingQuestion] = useState(null);
   const [authoringSection, setAuthoringSection] = useState(null);
   const [actionStatus, setActionStatus] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [confirmPending, setConfirmPending] = useState(false);
   const [editingImageField, setEditingImageField] = useState("");
+  const [editingPassageFile, setEditingPassageFile] = useState(false);
 
   const sectionForm = useForm({ defaultValues: { title: "", type: "reading_writing", duration: 30, order: 1 } });
   const examForm = useForm({
@@ -91,6 +94,9 @@ export default function AdminExamsPage({ mode = "admin" }) {
   const questionForm = useForm({
     defaultValues: {
       questionText: "", formulaText: "", skill: "", difficulty: "MEDIUM", explanation: "", explanationImageUrl: "", order: 1,
+      imageUrl: "", acceptedAnswers: "", hasAnswerChoices: true,
+      passageTitle: "", passageCategory: "reading", passageContent: "", passageAttachmentUrl: "",
+      passageAttachmentName: "", passageAttachmentMimeType: "",
       correctOption: "A", optionA: "", optionAImageUrl: "", optionB: "", optionBImageUrl: "",
       optionC: "", optionCImageUrl: "", optionD: "", optionDImageUrl: "",
     },
@@ -160,9 +166,32 @@ export default function AdminExamsPage({ mode = "admin" }) {
       difficulty: question.difficulty,
       explanation: question.explanation,
       explanationImageUrl: question.explanationImageUrl || "",
+      imageUrl: question.imageUrl || "",
+      acceptedAnswers: Array.isArray(question.acceptedAnswers) ? question.acceptedAnswers.join(", ") : "",
+      hasAnswerChoices: question.type !== "text_input",
+      passageTitle: question.passage?.title || "",
+      passageCategory: question.passage?.category || "reading",
+      passageContent: question.passage?.content || "",
+      passageAttachmentUrl: question.passage?.attachmentUrl || "",
+      passageAttachmentName: question.passage?.attachmentName || "",
+      passageAttachmentMimeType: question.passage?.attachmentMimeType || "",
       order: question.order,
       ...optionValues(question),
     });
+  }
+
+  async function openExamViewer(exam) {
+    setViewingExamLoading(true);
+    setViewingExam(exam);
+    try {
+      const detail = examDetails[exam.id] || await getExam(exam.id);
+      setViewingExam(detail);
+      setExamDetails((current) => ({ ...current, [exam.id]: detail }));
+    } catch (error) {
+      setActionStatus({ type: "error", message: getApiErrorMessage(error, "Exam details could not be loaded.") });
+    } finally {
+      setViewingExamLoading(false);
+    }
   }
 
   async function handleExamUpdate(values) {
@@ -210,10 +239,27 @@ export default function AdminExamsPage({ mode = "admin" }) {
         difficulty: values.difficulty,
         explanation: values.explanation.trim(),
         explanationImageUrl: values.explanationImageUrl || null,
+        imageUrl: values.imageUrl || null,
         order: Number(values.order),
       };
 
-      if (editingQuestion.sectionType === "math" && editingQuestion.type !== "text_input") {
+      if (editingQuestion.sectionType === "reading_writing") {
+        const passagePayload = {
+          title: values.passageTitle.trim() || "Untitled passage",
+          category: values.passageCategory.trim() || "reading",
+          content: values.passageContent.trim(),
+          attachmentUrl: values.passageAttachmentUrl || null,
+          attachmentName: values.passageAttachmentName || null,
+          attachmentMimeType: values.passageAttachmentMimeType || null,
+        };
+        const updatedPassage = editingQuestion.passage
+          ? await updatePassage(editingQuestion.passage.id, passagePayload)
+          : await createPassage(passagePayload);
+        payload.passageId = updatedPassage.id;
+      }
+
+      if (values.hasAnswerChoices) {
+        payload.type = editingQuestion.sectionType === "reading_writing" ? "passage_question" : "single_choice";
         payload.correctAnswer = { value: values.correctOption };
         payload.options = OPTION_LABELS.map((label, index) => ({
           label,
@@ -222,6 +268,14 @@ export default function AdminExamsPage({ mode = "admin" }) {
           isCorrect: values.correctOption === label,
           order: index + 1,
         }));
+        payload.acceptedAnswers = null;
+      } else {
+        const acceptedAnswers = values.acceptedAnswers.split(",").map((value) => value.trim()).filter(Boolean);
+        if (!acceptedAnswers.length) throw new Error("Enter at least one accepted answer.");
+        payload.type = "text_input";
+        payload.options = [];
+        payload.acceptedAnswers = acceptedAnswers;
+        payload.correctAnswer = { acceptedAnswers };
       }
 
       await updateQuestion(editingQuestion.id, payload);
@@ -246,6 +300,25 @@ export default function AdminExamsPage({ mode = "admin" }) {
       setActionStatus({ type: "error", message: getApiErrorMessage(error, "Image could not be uploaded.") });
     } finally {
       setEditingImageField("");
+    }
+  }
+
+  async function handleEditingPassageFileUpload(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setEditingPassageFile(true);
+    setActionStatus({ type: "pending", message: "Uploading passage material..." });
+    try {
+      const uploaded = await uploadPassageFile(file);
+      questionForm.setValue("passageAttachmentUrl", uploaded.url, { shouldDirty: true });
+      questionForm.setValue("passageAttachmentName", uploaded.name, { shouldDirty: true });
+      questionForm.setValue("passageAttachmentMimeType", uploaded.mimeType, { shouldDirty: true });
+      setActionStatus(null);
+    } catch (error) {
+      setActionStatus({ type: "error", message: getApiErrorMessage(error, "Passage material could not be uploaded.") });
+    } finally {
+      event.target.value = "";
+      setEditingPassageFile(false);
     }
   }
 
@@ -301,7 +374,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
                           <td data-label="Content">{exam.sections.length} modules · {questionCount(exam)} questions</td>
                           <td data-label="Status"><span className={`table-status ${exam.isPublished ? "approved" : "pending"}`}>{exam.isPublished ? "Published" : "Draft"}</span></td>
                           <td className="table-actions"><RowActionMenu label={`Actions for ${exam.title}`} items={[
-                            { label: "View", icon: Eye, onSelect: () => setViewingExam(exam) },
+                            { label: "View", icon: Eye, onSelect: () => openExamViewer(exam) },
                             { label: "Edit", icon: Pencil, onSelect: () => openExamEditor(exam) },
                             { label: "Delete", icon: Trash2, tone: "danger", onSelect: () => setConfirmAction({ title: "Delete exam?", message: `"${exam.title}" and all modules, questions, and attempts will be removed.`, confirmLabel: "Delete exam", run: () => deleteExam(exam.id) }) },
                           ]} /></td>
@@ -343,30 +416,29 @@ export default function AdminExamsPage({ mode = "admin" }) {
         </Card>
       </div>
 
-      <Modal open={Boolean(viewingExam)} title="Exam details" onClose={() => setViewingExam(null)} actions={<Button variant="ghost" onClick={() => setViewingExam(null)}>Close</Button>}>
-        {viewingExam ? <div className="exam-detail-grid"><div><span>Title</span><b>{viewingExam.title}</b></div><div><span>Source</span><b>{viewingExam.source || "MONOPREP"}</b></div><div><span>Access</span><b>{viewingExam.accessType}</b></div><div><span>Status</span><b>{viewingExam.isPublished ? "Published" : "Draft"}</b></div><div><span>Mode</span><b>{viewingExam.contentMode}</b></div><div><span>Duration</span><b>{viewingExam.totalDuration} minutes</b></div><p>{viewingExam.description}</p></div> : null}
+      <Modal open={Boolean(viewingExam)} title="Exam details" className="modal-card-wide exam-content-view-modal" onClose={() => setViewingExam(null)} actions={<Button variant="ghost" onClick={() => setViewingExam(null)}>Close</Button>}>
+        {viewingExamLoading ? <Loader label="Loading complete exam content..." /> : viewingExam ? (
+          <div className="exam-content-view">
+            <div className="exam-detail-grid"><div><span>Title</span><b>{viewingExam.title}</b></div><div><span>Source</span><b>{viewingExam.source || "MONOPREP"}</b></div><div><span>Access</span><b>{viewingExam.accessType}</b></div><div><span>Status</span><b>{viewingExam.isPublished ? "Published" : "Draft"}</b></div><div><span>Mode</span><b>{viewingExam.contentMode}</b></div><div><span>Duration</span><b>{viewingExam.totalDuration} minutes</b></div><p>{viewingExam.description}</p></div>
+            <div className="exam-content-sections">
+              {(viewingExam.sections || []).map((section) => (
+                <section key={section.id} className="exam-content-section">
+                  <header><div><span>{section.type.replaceAll("_", " ")}</span><h3>{section.title}</h3></div><b>{section.questions?.length || 0} questions</b></header>
+                  <div className="exam-content-question-list">
+                    {(section.questions || []).map((question) => (
+                      <AdminQuestionPreview key={question.id} question={question} compact />
+                    ))}
+                  </div>
+                </section>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </Modal>
 
       <Modal open={Boolean(viewingQuestion)} title="Question details" className="modal-card-wide" onClose={() => setViewingQuestion(null)} actions={<Button variant="ghost" onClick={() => setViewingQuestion(null)}>Close</Button>}>
         {viewingQuestion ? (
-          <div className="question-preview">
-            <div className="preview-pills"><span className="pill">{viewingQuestion.skill}</span><span className="pill">{viewingQuestion.difficulty}</span></div>
-            {viewingQuestion.formulaText ? <MathJaxContent block className="preview-formula">{viewingQuestion.formulaText}</MathJaxContent> : null}
-            <MathJaxContent block className="preview-question">{viewingQuestion.questionText}</MathJaxContent>
-            <div className="preview-options">
-              {viewingQuestion.options?.map((option) => (
-                <div key={option.id || option.label} className={`preview-option ${option.isCorrect ? "correct" : ""}`.trim()}>
-                  <p><strong>{option.label}.</strong> <MathJaxContent>{option.text}</MathJaxContent></p>
-                  {option.imageUrl ? <QuestionImage src={option.imageUrl} alt={`Option ${option.label}`} /> : null}
-                </div>
-              ))}
-            </div>
-            <div className="preview-explanation">
-              <strong>Explanation</strong>
-              <MathJaxContent block>{viewingQuestion.explanation}</MathJaxContent>
-              {viewingQuestion.explanationImageUrl ? <QuestionImage src={viewingQuestion.explanationImageUrl} alt="Worked solution" /> : null}
-            </div>
-          </div>
+          <AdminQuestionPreview question={viewingQuestion} />
         ) : null}
       </Modal>
 
@@ -400,17 +472,39 @@ export default function AdminExamsPage({ mode = "admin" }) {
         <form id="section-edit-form" className="stack-form" onSubmit={sectionForm.handleSubmit(handleSectionUpdate)}><label className="form-field"><span>Title</span><input {...sectionForm.register("title", { required: true, minLength: 2 })} /></label><div className="form-field"><span>Type</span><PremiumSelect ariaLabel="Module type" value={sectionForm.watch("type")} onChange={(value) => sectionForm.setValue("type", value)} options={[{ value: "reading_writing", label: "Reading & Writing" }, { value: "math", label: "Math" }, { value: "custom_practice", label: "Custom Practice" }]} /></div><div className="crm-form-row"><label className="form-field"><span>Duration</span><input type="number" min="1" {...sectionForm.register("duration", { required: true, min: 1 })} /></label><label className="form-field"><span>Order</span><input type="number" min="0" {...sectionForm.register("order", { required: true, min: 0 })} /></label></div>{actionStatus?.type === "error" ? <p className="support-status error">{actionStatus.message}</p> : null}</form>
       </Modal>
 
-      <Modal open={Boolean(editingQuestion)} title="Edit question" className="modal-card-wide" onClose={() => setEditingQuestion(null)} actions={<><Button variant="ghost" onClick={() => setEditingQuestion(null)}>Cancel</Button><Button type="submit" form="question-edit-form" disabled={actionStatus?.type === "pending" || Boolean(editingImageField)}>Save question</Button></>}>
+      <Modal open={Boolean(editingQuestion)} title="Edit question" className="modal-card-wide" onClose={() => setEditingQuestion(null)} actions={<><Button variant="ghost" onClick={() => setEditingQuestion(null)}>Cancel</Button><Button type="submit" form="question-edit-form" disabled={actionStatus?.type === "pending" || Boolean(editingImageField) || editingPassageFile}>Save question</Button></>}>
         <form id="question-edit-form" className="stack-form" onSubmit={questionForm.handleSubmit(handleQuestionUpdate)}>
+          {editingQuestion?.sectionType === "reading_writing" ? (
+            <fieldset className="editor-panel passage-editor question-edit-passage">
+              <legend>Passage & material</legend>
+              <div className="crm-form-row">
+                <label className="form-field"><span>Passage title (optional)</span><input placeholder="Untitled passage" {...questionForm.register("passageTitle")} /></label>
+                <label className="form-field"><span>Category</span><input {...questionForm.register("passageCategory", { required: true, minLength: 2 })} /></label>
+              </div>
+              <div className="form-field">
+                <span>Passage material</span>
+                <label className="passage-file-picker">
+                  <input type="file" accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.webp,.gif,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/png,image/jpeg,image/webp,image/gif" disabled={editingPassageFile} onChange={handleEditingPassageFileUpload} />
+                  <Upload aria-hidden="true" />
+                  <span><b>{editingPassageFile ? "Uploading material..." : "Choose PDF, Word, or image"}</b><small>Replaces the passage material shown to students</small></span>
+                </label>
+                {questionForm.watch("passageAttachmentUrl") ? <><div className="passage-file-chip"><FileText aria-hidden="true" /><span>{questionForm.watch("passageAttachmentName") || "Attached material"}</span><button type="button" aria-label="Remove passage material" onClick={() => { questionForm.setValue("passageAttachmentUrl", "", { shouldDirty: true }); questionForm.setValue("passageAttachmentName", "", { shouldDirty: true }); questionForm.setValue("passageAttachmentMimeType", "", { shouldDirty: true }); }}><X aria-hidden="true" /></button></div><PassageAssetViewer compact passage={{ attachmentUrl: questionForm.watch("passageAttachmentUrl"), attachmentName: questionForm.watch("passageAttachmentName"), attachmentMimeType: questionForm.watch("passageAttachmentMimeType") }} /></> : null}
+              </div>
+              <RichMathEditor form={questionForm} name="passageContent" label="Passage content" className="passage-author-text" placeholder="Write or edit the passage text." showMathTemplates={false} />
+            </fieldset>
+          ) : null}
+          <QuestionEditorImageField form={questionForm} fieldName="imageUrl" label="Question image" alt="Question image preview" uploadingImageField={editingImageField} onImageUpload={handleQuestionEditorImageUpload} />
           <RichMathEditor form={questionForm} name="questionText" label="Question text" className="question-author-text" placeholder={'Write text and formulas, for example: \\(f(x)=a^x+b\\)'} rules={{ required: true, minLength: 3 }} showMathTemplates />
           <RichMathEditor form={questionForm} name="formulaText" label="Question formula (optional)" placeholder="Formula shown with this question only" showMathTemplates />
-          {editingQuestion?.sectionType === "math" && editingQuestion.type !== "text_input" ? (
-            <MathAnswerOptionEditors
+          <label className="question-answer-mode-toggle"><input type="checkbox" {...questionForm.register("hasAnswerChoices")} /><span aria-hidden="true" /><div><b>Multiple-choice answers</b><small>Turn off for a typed student response.</small></div></label>
+          {questionForm.watch("hasAnswerChoices") ? (
+            <AnswerOptionEditors
               form={questionForm}
               uploadingImageField={editingImageField}
               onImageUpload={handleQuestionEditorImageUpload}
+              mathEnabled={editingQuestion?.sectionType === "math"}
             />
-          ) : null}
+          ) : <label className="form-field"><span>Accepted answers (comma separated)</span><input placeholder="3, 3.0, 6/2" {...questionForm.register("acceptedAnswers", { required: true })} /></label>}
           <div className="crm-form-row crm-form-row-three"><label className="form-field"><span>Skill</span><input {...questionForm.register("skill", { required: true, minLength: 2 })} /></label><div className="form-field"><span>Difficulty</span><PremiumSelect ariaLabel="Difficulty" value={questionForm.watch("difficulty")} onChange={(value) => questionForm.setValue("difficulty", value)} options={[{ value: "EASY", label: "Easy" }, { value: "MEDIUM", label: "Medium" }, { value: "HARD", label: "Hard" }]} /></div><label className="form-field"><span>Order</span><input type="number" min="0" {...questionForm.register("order", { required: true, min: 0 })} /></label></div>
           <RichMathEditor
             form={questionForm}
@@ -438,18 +532,61 @@ export default function AdminExamsPage({ mode = "admin" }) {
   );
 }
 
-function MathAnswerOptionEditors({ form, uploadingImageField, onImageUpload }) {
+function AdminQuestionPreview({ question, compact = false }) {
+  const correctValue = question.correctAnswer?.value
+    ?? question.correctAnswer
+    ?? (question.options || []).find((option) => option.isCorrect)?.label;
+  const acceptedAnswers = Array.isArray(question.acceptedAnswers)
+    ? question.acceptedAnswers
+    : question.correctAnswer?.acceptedAnswers || [];
+
+  return (
+    <article className={`question-preview admin-question-preview ${compact ? "compact" : ""}`.trim()}>
+      <div className="preview-pills"><span className="pill">Question {question.order}</span><span className="pill">{question.skill}</span><span className="pill">{question.difficulty}</span></div>
+      {question.passage ? (
+        <section className="admin-question-passage">
+          <header><span>{question.passage.category || "Reading"}</span><h4>{question.passage.title || "Passage"}</h4></header>
+          <PassageAssetViewer passage={question.passage} compact={compact} />
+          {question.passage.content ? <MathJaxContent block>{question.passage.content}</MathJaxContent> : null}
+        </section>
+      ) : null}
+      {question.imageUrl ? <QuestionImage src={question.imageUrl} alt="Question material" /> : null}
+      {question.formulaText ? <MathJaxContent block className="preview-formula">{question.formulaText}</MathJaxContent> : null}
+      <MathJaxContent block className="preview-question">{question.questionText}</MathJaxContent>
+      {(question.options || []).length ? (
+        <div className="preview-options">
+          {question.options.map((option) => {
+            const correct = option.isCorrect || String(correctValue).toUpperCase() === option.label;
+            return (
+              <div key={option.id || option.label} className={`preview-option ${correct ? "correct" : ""}`.trim()}>
+                <p><strong>{option.label}.</strong> <MathJaxContent>{option.text}</MathJaxContent></p>
+                {option.imageUrl ? <QuestionImage src={option.imageUrl} alt={`Option ${option.label}`} /> : null}
+              </div>
+            );
+          })}
+        </div>
+      ) : acceptedAnswers.length ? <p className="preview-accepted-answers"><strong>Accepted answers:</strong> {acceptedAnswers.join(", ")}</p> : null}
+      <div className="preview-explanation">
+        <strong>Explanation</strong>
+        <MathJaxContent block>{question.explanation}</MathJaxContent>
+        {question.explanationImageUrl ? <QuestionImage src={question.explanationImageUrl} alt="Worked solution" /> : null}
+      </div>
+    </article>
+  );
+}
+
+function AnswerOptionEditors({ form, uploadingImageField, onImageUpload, mathEnabled }) {
   const correctOption = form.watch("correctOption");
 
   return (
     <fieldset className="editor-panel answer-editor math-option-editors">
-      <legend>Math answer choices</legend>
-      <div className="question-options-grid with-math-options">
+      <legend>Answer choices</legend>
+      <div className={`question-options-grid ${mathEnabled ? "with-math-options" : ""}`.trim()}>
         {OPTION_LABELS.map((label) => {
           const selected = correctOption === label;
           const imageField = `option${label}ImageUrl`;
           return (
-            <div key={label} className={`option-author-block option-author-math ${selected ? "correct" : ""}`.trim()}>
+            <div key={label} className={`option-author-block ${mathEnabled ? "option-author-math" : "option-author-compact"} ${selected ? "correct" : ""}`.trim()}>
               <div className="option-author-heading">
                 <span>Option {label}</span>
                 <button type="button" className={selected ? "selected" : ""} onClick={() => form.setValue("correctOption", label, { shouldDirty: true })}>
@@ -463,7 +600,7 @@ function MathAnswerOptionEditors({ form, uploadingImageField, onImageUpload }) {
                 className="option-rich-math-editor"
                 placeholder={`Write answer ${label} with text or formulas.`}
                 rules={{ required: true }}
-                showMathTemplates
+                showMathTemplates={mathEnabled}
               />
               <QuestionEditorImageField
                 form={form}

@@ -160,7 +160,7 @@ export default function SupportWidget() {
         onPointerUp={finishDrag}
         onPointerCancel={finishDrag}
       >
-        <LordIcon src={SUPPORT_ICON} size={34} colors="primary:#ffffff,secondary:#93c5fd" />
+        <LordIcon src={SUPPORT_ICON} size={25} colors="primary:#ffffff,secondary:#93c5fd" />
         <span>Support</span>
       </button>
 

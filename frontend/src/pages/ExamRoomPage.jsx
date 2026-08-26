@@ -649,7 +649,6 @@ export default function ExamRoomPage() {
       />
 
       <div className="exam-divider-line" />
-      <div className="test-preview-banner">THIS IS A TEST PREVIEW</div>
       {banner ? <div className="exam-banner">{banner}</div> : null}
       {lineReaderActive && !modalOpen && !activeDialog ? (
         <div className="line-reader-strip" style={{ top: `${lineReaderY}px` }} aria-hidden="true" />

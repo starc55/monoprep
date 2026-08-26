@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from 'react';
-import { Italic, Underline } from 'lucide-react';
+import { Italic, List, Underline } from 'lucide-react';
 import { MathfieldElement } from 'mathlive';
 import MathJaxContent from './MathJaxContent.jsx';
 
@@ -18,7 +18,7 @@ const MATH_TEMPLATES = [
   { label: 'System', latex: '\\begin{cases}x+y=1\\\\x-y=3\\end{cases}' }
 ];
 
-const SOURCE_TOKEN_PATTERN = /(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|<\/?(?:em|i|u)>)/gi;
+const SOURCE_TOKEN_PATTERN = /(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|<\/?(?:em|i|u|ul|ol|li)>)/gi;
 
 function templateSource(template) {
   return template.display ? `\\[${template.latex}\\]` : `\\(${template.latex}\\)`;
@@ -73,14 +73,15 @@ function hydrateEditor(editor, source, onInput) {
     const parent = parentStack[parentStack.length - 1];
     const normalized = token.toLowerCase();
 
-    if (normalized === '<em>' || normalized === '<i>' || normalized === '<u>') {
-      const element = document.createElement(normalized === '<u>' ? 'u' : 'em');
+    if (['<em>', '<i>', '<u>', '<ul>', '<ol>', '<li>'].includes(normalized)) {
+      const tagName = normalized.slice(1, -1);
+      const element = document.createElement(tagName === 'i' ? 'em' : tagName);
       parent.append(element);
       parentStack.push(element);
       return;
     }
 
-    if (normalized === '</em>' || normalized === '</i>' || normalized === '</u>') {
+    if (['</em>', '</i>', '</u>', '</ul>', '</ol>', '</li>'].includes(normalized)) {
       if (parentStack.length > 1) parentStack.pop();
       return;
     }
@@ -116,6 +117,9 @@ function serializeNode(node) {
   const content = Array.from(element.childNodes).map(serializeNode).join('');
   if (element.tagName === 'EM' || element.tagName === 'I') return `<em>${content}</em>`;
   if (element.tagName === 'U') return `<u>${content}</u>`;
+  if (element.tagName === 'UL') return `<ul>${content}</ul>`;
+  if (element.tagName === 'OL') return `<ol>${content}</ol>`;
+  if (element.tagName === 'LI') return `<li>${content}</li>`;
   if (element.tagName === 'DIV' || element.tagName === 'P') return `${content}\n`;
   return content;
 }
@@ -281,6 +285,18 @@ export default function RichMathEditor({
     editor.focus();
   }
 
+  function applyList() {
+    const editor = editorRef.current;
+    const range = getInsertionRange();
+    if (!editor || !range) return;
+
+    restoreSelection(range);
+    document.execCommand('insertUnorderedList', false);
+    rememberSelection();
+    syncEditor();
+    editor.focus();
+  }
+
   function handlePaste(event) {
     event.preventDefault();
     const text = event.clipboardData.getData('text/plain');
@@ -305,6 +321,9 @@ export default function RichMathEditor({
           </button>
           <button type="button" title="Underline" aria-label="Underline" onPointerDown={(event) => event.preventDefault()} onClick={() => applyFormat('u')}>
             <Underline aria-hidden="true" />
+          </button>
+          <button type="button" title="Bullet list" aria-label="Bullet list" onPointerDown={(event) => event.preventDefault()} onClick={applyList}>
+            <List aria-hidden="true" />
           </button>
         </div>
         {showMathTemplates ? (

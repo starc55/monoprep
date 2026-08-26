@@ -2,11 +2,14 @@ import { useMemo } from 'react';
 import { convertLatexToMarkup } from 'mathlive';
 import 'mathlive/static.css';
 
-const RICH_TEXT_TAG_PATTERN = /<\/?(?:em|i|u)>/gi;
-const CONTENT_TOKEN_PATTERN = /(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|<\/?(?:em|i|u)>)/gi;
+const RICH_TEXT_TAG_PATTERN = /<\/?(?:em|i|u|ul|ol|li)>/gi;
+const CONTENT_TOKEN_PATTERN = /(\\\[[\s\S]*?\\\]|\\\([\s\S]*?\\\)|<\/?(?:em|i|u|ul|ol|li)>)/gi;
 
 export function stripRichTextMarkup(value = '') {
-  return String(value).replace(RICH_TEXT_TAG_PATTERN, '');
+  return String(value)
+    .replace(/<li>/gi, '- ')
+    .replace(/<\/li>/gi, ' ')
+    .replace(RICH_TEXT_TAG_PATTERN, '');
 }
 
 function escapeHtml(value) {

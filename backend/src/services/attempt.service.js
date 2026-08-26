@@ -258,13 +258,22 @@ export async function getExamForUser(examId, user) {
 }
 
 export async function startAttemptForUser(user, examId) {
+  const canManage = canManageExams(user);
   const exam = await prisma.exam.findUnique({
     where: { id: examId },
     include: examDeepInclude,
   });
 
-  if (!exam || (!exam.isPublished && user.role !== "ADMIN")) {
+  if (!exam || (!exam.isPublished && !canManage)) {
     throw new ApiError(404, "Published exam not found.");
+  }
+
+  const activeQuestionCount = getActiveSections(exam.sections).reduce(
+    (total, section) => total + (section.questions?.length || 0),
+    0
+  );
+  if (!activeQuestionCount) {
+    throw new ApiError(409, "This exam is still being prepared and has no questions yet.");
   }
 
   assertExamAccess(exam, user);
@@ -284,7 +293,11 @@ export async function startAttemptForUser(user, examId) {
     });
 
     if (existingAttempt) {
-      return buildAttemptResponse(existingAttempt, false);
+      const deadline = getAttemptDeadline(existingAttempt);
+      if (!deadline || Date.now() <= deadline.getTime()) {
+        return buildAttemptResponse(existingAttempt, false);
+      }
+      await tx.attempt.delete({ where: { id: existingAttempt.id } });
     }
 
     if (exam.type === "FULL_LENGTH") {
@@ -640,7 +653,16 @@ export async function listAttemptsForUser(userId) {
     orderBy: { startedAt: "desc" },
   });
 
-  return attempts.map((attempt) => ({
+  return attempts
+    .filter((attempt) => {
+      if (attempt.status !== "IN_PROGRESS") return true;
+      const durationMinutes = Math.max(0, Number(attempt.exam?.totalDuration) || 0);
+      if (!durationMinutes) return true;
+      const expiresAt = new Date(attempt.startedAt).getTime()
+        + (durationMinutes + env.examSubmissionGraceMinutes) * 60 * 1000;
+      return Date.now() <= expiresAt;
+    })
+    .map((attempt) => ({
     id: attempt.id,
     examId: attempt.examId,
     examTitle: attempt.exam.title,
@@ -655,7 +677,7 @@ export async function listAttemptsForUser(userId) {
     timeSpent: attempt.timeSpent,
     answersCount: attempt.answers.length,
     hasAiFeedback: Boolean(attempt.aiFeedback),
-  }));
+    }));
 }
 
 export function buildAttemptSummaryForAI(attemptResponse) {

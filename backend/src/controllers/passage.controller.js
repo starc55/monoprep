@@ -18,7 +18,10 @@ export async function listPassages(req, res) {
 export async function createPassage(req, res) {
   ensurePassageMaterial(req.body.content, req.body.attachmentUrl);
   const passage = await prisma.passage.create({
-    data: req.body
+    data: {
+      ...req.body,
+      title: String(req.body.title || '').trim() || 'Untitled passage'
+    }
   });
 
   res.status(201).json({ passage });
@@ -34,7 +37,12 @@ export async function updatePassage(req, res) {
   );
   const passage = await prisma.passage.update({
     where: { id: req.params.id },
-    data: req.body
+    data: {
+      ...req.body,
+      ...(req.body.title !== undefined
+        ? { title: String(req.body.title || '').trim() || 'Untitled passage' }
+        : {})
+    }
   });
 
   res.json({ passage });

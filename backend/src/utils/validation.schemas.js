@@ -60,7 +60,7 @@ export const sectionUpdateSchema = sectionSchema.partial().extend({
 });
 
 export const passageSchema = z.object({
-  title: z.string().min(2),
+  title: z.string().max(240).optional(),
   content: z.string().max(100000),
   category: z.string().min(2),
   attachmentUrl: optionalAssetUrlSchema,
@@ -170,6 +170,7 @@ const questionBankChoiceSchema = z.object({
 });
 
 export const questionBankItemSchema = z.object({
+  sourceQuestionId: z.string().min(1).max(120).optional(),
   subject: z.enum(["Math", "Reading & Writing"]),
   domain: z.string().min(2).max(120),
   skill: z.string().min(2).max(120),

@@ -7,7 +7,8 @@ export default function ReadingQuestionRenderer({
   value,
   onChange,
   eliminatedValues,
-  onToggleEliminated
+  onToggleEliminated,
+  eliminateMode
 }) {
   const isTextInput = question.type === 'text_input';
 
@@ -24,6 +25,7 @@ export default function ReadingQuestionRenderer({
           multiple={question.type === 'multi_choice'}
           eliminatedValues={eliminatedValues}
           onToggleEliminated={onToggleEliminated}
+          eliminateMode={eliminateMode}
         />
       )}
     </div>

@@ -33,7 +33,8 @@ export default function MathQuestionRenderer({
   value,
   onChange,
   eliminatedValues,
-  onToggleEliminated
+  onToggleEliminated,
+  eliminateMode
 }) {
   const [calculatorOpen, setCalculatorOpen] = useState(false);
   const isTextInput = question.type === 'text_input' || !question.options?.length;
@@ -59,6 +60,7 @@ export default function MathQuestionRenderer({
           onChange={onChange}
           eliminatedValues={eliminatedValues}
           onToggleEliminated={onToggleEliminated}
+          eliminateMode={eliminateMode}
         />
       )}
       <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />

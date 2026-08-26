@@ -7,7 +7,8 @@ export default function QuestionOptions({
   onChange,
   multiple = false,
   eliminatedValues = [],
-  onToggleEliminated
+  onToggleEliminated,
+  eliminateMode = false
 }) {
   const selectedValues = Array.isArray(value?.values)
     ? value.values
@@ -29,10 +30,10 @@ export default function QuestionOptions({
   }
 
   return (
-    <div className="choice-list">
+    <div className={`choice-list ${eliminateMode ? 'elimination-mode' : ''}`.trim()}>
       {(question.options || []).map((option) => (
         <div key={option.id || option.label} className="choice-row">
-          <button
+          {eliminateMode ? <button
             type="button"
             className={`choice-item ${selectedValues.includes(option.label) ? 'selected' : ''} ${eliminatedValues.includes(option.label) ? 'eliminated' : ''}`.trim()}
             onClick={() => toggleValue(option.label)}
@@ -46,7 +47,7 @@ export default function QuestionOptions({
                 </span>
               ) : null}
             </span>
-          </button>
+          </button> : null}
           <button
             type="button"
             className={`eliminate-choice ${eliminatedValues.includes(option.label) ? 'active' : ''}`.trim()}

@@ -31,7 +31,7 @@ function tokenize(content) {
   let tokenIndex = 0;
   const output = [];
 
-  String(content || '').split(/(<\/?(?:em|i|u)>)/gi).filter(Boolean).forEach((part) => {
+  String(content || '').split(/(<\/?(?:em|i|u|ul|ol|li)>)/gi).filter(Boolean).forEach((part) => {
     const tag = part.toLowerCase();
     if (tag === '<em>' || tag === '<i>') {
       italic = true;
@@ -49,6 +49,15 @@ function tokenize(content) {
       underline = false;
       return;
     }
+    if (tag === '<li>') {
+      output.push({ token: '\n- ', key: `${tokenIndex++}-list-start`, wordIndex: null, isSpace: true, italic, underline });
+      return;
+    }
+    if (tag === '</li>') {
+      output.push({ token: '\n', key: `${tokenIndex++}-list-end`, wordIndex: null, isSpace: true, italic, underline });
+      return;
+    }
+    if (['<ul>', '</ul>', '<ol>', '</ol>'].includes(tag)) return;
 
     part.split(/(\s+)/).filter(Boolean).forEach((token) => {
       const isSpace = /^\s+$/.test(token);
@@ -196,6 +205,7 @@ export default function PassagePanel({ question, attemptId, sectionType }) {
         </button>
       </div>
       <div className="passage-content highlightable-passage" ref={panelRef} onMouseUp={handleMouseUp}>
+        <PassageAssetViewer passage={question.passage} />
         {question.passage.content ? (
           <p>
             {tokens.map(({ token, key, wordIndex, isSpace, italic, underline }) => {
@@ -217,7 +227,6 @@ export default function PassagePanel({ question, attemptId, sectionType }) {
             })}
           </p>
         ) : null}
-        <PassageAssetViewer passage={question.passage} />
       </div>
       {selectionRange ? (
         <div className="highlight-toolbar">

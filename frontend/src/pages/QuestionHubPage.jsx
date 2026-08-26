@@ -27,6 +27,7 @@ import Loader from '../components/ui/Loader.jsx';
 import PremiumSelect from '../components/ui/PremiumSelect.jsx';
 import FormulaReferenceDialog from '../components/exam/FormulaReferenceDialog.jsx';
 import CalculatorModal from '../components/exam/renderers/CalculatorModal.jsx';
+import PassageAssetViewer from '../components/exam/PassageAssetViewer.jsx';
 import MathJaxContent from '../components/math/MathJaxContent.jsx';
 import {
   getQuestionBankItems,
@@ -142,6 +143,7 @@ export default function QuestionHubPage() {
   const [activeSession, setActiveSession] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [feedback, setFeedback] = useState(null);
+  const [explanationOpen, setExplanationOpen] = useState(false);
   const [metadataOpen, setMetadataOpen] = useState(false);
   const [eliminateMode, setEliminateMode] = useState(false);
   const [eliminated, setEliminated] = useState({});
@@ -287,6 +289,7 @@ export default function QuestionHubPage() {
     setStage('exam');
     setSelectedAnswer(results[sessionItems[0].id]?.answer || '');
     setFeedback(null);
+    setExplanationOpen(false);
     setMetadataOpen(false);
     setEliminateMode(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -316,6 +319,7 @@ export default function QuestionHubPage() {
     writeResults(user, next);
     saveQuestionHubProgress({ questionKey: item.id, ...next[item.id] }).catch(() => {});
     setFeedback(correct ? 'correct' : 'incorrect');
+    setExplanationOpen(false);
   }
 
   function toggleMarked(item) {
@@ -350,6 +354,7 @@ export default function QuestionHubPage() {
     setActiveSession({ ...activeSession, index, questionStartedAt: Date.now() });
     setSelectedAnswer(results[nextItem.id]?.answer || '');
     setFeedback(null);
+    setExplanationOpen(false);
     setEliminateMode(false);
   }
 
@@ -361,6 +366,7 @@ export default function QuestionHubPage() {
       setStage('summary');
       setSelectedAnswer('');
       setFeedback(null);
+      setExplanationOpen(false);
       return;
     }
     goToQuestion(nextIndex);
@@ -393,7 +399,7 @@ export default function QuestionHubPage() {
                 <ArrowLeft aria-hidden="true" />
                 Session
               </button>
-              <button type="button" className={feedback ? '' : 'muted'} disabled={!feedback} onClick={() => setFeedback((value) => value || 'show')}>
+              <button type="button" className={explanationOpen ? 'active' : feedback ? '' : 'muted'} disabled={!feedback} onClick={() => setExplanationOpen((value) => !value)}>
                 <Info aria-hidden="true" />
                 Explanation
               </button>
@@ -429,11 +435,12 @@ export default function QuestionHubPage() {
             </div>
           ) : null}
 
-          <div className={activeItem.passage ? 'qhub-exam-body split' : 'qhub-exam-body'}>
-            {activeItem.passage ? (
+          <div className={(activeItem.passage || activeItem.passageAttachmentUrl) ? 'qhub-exam-body split' : 'qhub-exam-body'}>
+            {activeItem.passage || activeItem.passageAttachmentUrl ? (
               <aside className="qhub-passage-panel">
                 {activeItem.passageTitle ? <h2>{activeItem.passageTitle}</h2> : null}
-                <p>{activeItem.passage}</p>
+                <PassageAssetViewer passage={{ attachmentUrl: activeItem.passageAttachmentUrl, attachmentName: activeItem.passageAttachmentName, attachmentMimeType: activeItem.passageAttachmentMimeType }} />
+                {activeItem.passage ? <MathJaxContent block>{activeItem.passage}</MathJaxContent> : null}
               </aside>
             ) : null}
 
@@ -461,11 +468,14 @@ export default function QuestionHubPage() {
                 <div className="qhub-exam-choices">
                   {activeChoices.map((choice) => {
                     const isEliminated = currentEliminated.includes(choice.label);
+                    const correctLabel = String(getCorrectAnswer(activeItem) || '').toUpperCase();
+                    const isCorrectChoice = Boolean(feedback) && choice.label.toUpperCase() === correctLabel;
+                    const isIncorrectChoice = Boolean(feedback) && selectedAnswer === choice.label && !isCorrectChoice;
                     return (
                       <button
                         key={choice.label}
                         type="button"
-                        className={`${selectedAnswer === choice.label ? 'selected' : ''} ${isEliminated ? 'eliminated' : ''}`.trim()}
+                        className={`${selectedAnswer === choice.label ? 'selected' : ''} ${isEliminated ? 'eliminated' : ''} ${isCorrectChoice ? 'correct' : ''} ${isIncorrectChoice ? 'incorrect' : ''}`.trim()}
                         onClick={() => {
                           if (eliminateMode) {
                             toggleEliminated(choice.label);
@@ -474,6 +484,7 @@ export default function QuestionHubPage() {
                           if (!isEliminated) {
                             setSelectedAnswer(choice.label);
                             setFeedback(null);
+                            setExplanationOpen(false);
                           }
                         }}
                       >
@@ -493,6 +504,7 @@ export default function QuestionHubPage() {
                     onChange={(event) => {
                       setSelectedAnswer(event.target.value);
                       setFeedback(null);
+                      setExplanationOpen(false);
                     }}
                     placeholder="Your answer..."
                   />
@@ -501,11 +513,14 @@ export default function QuestionHubPage() {
 
               {feedback ? (
                 <div className={`qhub-feedback ${feedback === 'correct' ? 'correct' : 'incorrect'}`}>
-                  <strong>{feedback === 'correct' ? 'Correct' : `Correct answer: ${getCorrectAnswer(activeItem) || getAcceptedAnswers(activeItem).join(', ')}`}</strong>
-                  {activeItem.explanation ? (
-                    <MathJaxContent block>{activeItem.explanation}</MathJaxContent>
-                  ) : null}
+                  <strong>{feedback === 'correct' ? 'Correct answer' : 'Check the highlighted correct answer and try the next item.'}</strong>
                 </div>
+              ) : null}
+              {explanationOpen ? (
+                <aside className="qhub-explanation-tip" role="note">
+                  <div><Info aria-hidden="true" /><span><b>Explanation</b><small>Correct answer: {getCorrectAnswer(activeItem) || getAcceptedAnswers(activeItem).join(', ')}</small></span></div>
+                  {activeItem.explanation ? <MathJaxContent block>{activeItem.explanation}</MathJaxContent> : <p>No explanation has been added yet.</p>}
+                </aside>
               ) : null}
             </article>
           </div>

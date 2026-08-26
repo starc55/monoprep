@@ -67,7 +67,7 @@ export default function AdminPassagesPage() {
 
   async function handleSave(values) {
     const payload = {
-      title: values.title.trim(),
+      title: values.title.trim() || "Untitled passage",
       category: values.category.trim(),
       content: values.content.trim(),
       attachmentUrl: attachment?.url || null,
@@ -174,17 +174,9 @@ export default function AdminPassagesPage() {
       >
         <form id="passage-form" className="stack-form" onSubmit={form.handleSubmit(handleSave)}>
           <div className="crm-form-row">
-            <label className="form-field"><span>Title</span><input {...form.register("title", { required: true, minLength: 2 })} /></label>
+            <label className="form-field"><span>Title (optional)</span><input placeholder="Untitled passage" {...form.register("title")} /></label>
             <label className="form-field"><span>Category</span><input {...form.register("category", { required: true, minLength: 2 })} /></label>
           </div>
-          <RichMathEditor
-            form={form}
-            name="content"
-            label="Content"
-            className="passage-edit-content"
-            placeholder="Write the passage, then select text to apply italic or underline. Optional when a file is attached."
-            showMathTemplates={false}
-          />
           <div className="form-field">
             <span>Passage material</span>
             <label className="passage-file-picker">
@@ -209,12 +201,20 @@ export default function AdminPassagesPage() {
             ) : null}
             {attachment ? <PassageAssetViewer passage={{ attachmentUrl: attachment.url, attachmentName: attachment.name, attachmentMimeType: attachment.mimeType }} compact /> : null}
           </div>
+          <RichMathEditor
+            form={form}
+            name="content"
+            label="Content"
+            className="passage-edit-content"
+            placeholder="Write the passage and format it with italic, underline, or a list. Optional when a file is attached."
+            showMathTemplates={false}
+          />
           {status?.type === "error" ? <p className="support-status error">{status.message}</p> : null}
         </form>
       </Modal>
 
       <Modal open={dialog?.mode === "view"} title={dialog?.passage?.title || "Passage"} className="modal-card-wide" onClose={() => setDialog(null)} actions={<Button variant="ghost" onClick={() => setDialog(null)}>Close</Button>}>
-        {dialog?.passage ? <div className="passage-preview"><span className="pill">{dialog.passage.category}</span>{dialog.passage.content ? <MathJaxContent block>{dialog.passage.content}</MathJaxContent> : null}<PassageAssetViewer passage={dialog.passage} /></div> : null}
+        {dialog?.passage ? <div className="passage-preview"><span className="pill">{dialog.passage.category}</span><PassageAssetViewer passage={dialog.passage} />{dialog.passage.content ? <MathJaxContent block>{dialog.passage.content}</MathJaxContent> : null}</div> : null}
       </Modal>
 
       <ConfirmActionModal open={Boolean(confirmAction)} title={confirmAction?.title} message={confirmAction?.message} confirmLabel={confirmAction?.confirmLabel} pending={confirmPending} onCancel={() => setConfirmAction(null)} onConfirm={runConfirmAction} />

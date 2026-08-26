@@ -231,7 +231,6 @@ export default function AdminQuestionWorkspace({
   function handleInvalidQuestion(errors) {
     const labels = {
       questionText: 'question text',
-      passageTitle: 'passage title',
       passageCategory: 'passage category',
       skill: 'skill',
       explanation: 'explanation',
@@ -378,7 +377,7 @@ export default function AdminQuestionWorkspace({
           passageId = submittedValues.passageId;
         } else {
           const passage = await onCreatePassage({
-            title: submittedValues.passageTitle.trim(),
+            title: submittedValues.passageTitle.trim() || 'Untitled passage',
             category: submittedValues.passageCategory.trim(),
             content: submittedValues.passageContent.trim(),
             attachmentUrl: submittedValues.passageAttachmentUrl || null,
@@ -389,7 +388,7 @@ export default function AdminQuestionWorkspace({
         }
       }
 
-      await onCreateQuestion({
+      const createdQuestion = await onCreateQuestion({
         sectionId: activeSection.id,
         passageId,
         type: sectionType === 'reading_writing'
@@ -420,6 +419,7 @@ export default function AdminQuestionWorkspace({
       if (submittedValues.addToQuestionHub && onCreateQuestionHubItem) {
         try {
           await onCreateQuestionHubItem({
+            sourceQuestionId: createdQuestion.id,
             subject: sectionType === 'math' ? 'Math' : 'Reading & Writing',
             domain: submittedValues.questionHubDomain,
             skill: submittedValues.skill,
@@ -662,20 +662,12 @@ function ReadingFields({ form, values, passages, uploadingPassageFile, onPassage
           <>
             <label className="form-field">
               <span>Passage title</span>
-              <input {...form.register('passageTitle', { required: true, minLength: 2 })} />
+              <input placeholder="Optional" {...form.register('passageTitle')} />
             </label>
             <label className="form-field">
               <span>Category</span>
               <input {...form.register('passageCategory', { required: true, minLength: 2 })} />
             </label>
-            <RichMathEditor
-              form={form}
-              name="passageContent"
-              label="Passage content"
-              className="passage-author-text"
-              placeholder="Write the passage, then select text to apply italic or underline. Optional when a file is attached."
-              showMathTemplates={false}
-            />
             <div className="form-field">
               <span>Passage material</span>
               <label className="passage-file-picker">
@@ -702,6 +694,14 @@ function ReadingFields({ form, values, passages, uploadingPassageFile, onPassage
                 </>
               ) : null}
             </div>
+            <RichMathEditor
+              form={form}
+              name="passageContent"
+              label="Passage content"
+              className="passage-author-text"
+              placeholder="Write the passage, then format text with italic, underline, or a list. Optional when a file is attached."
+              showMathTemplates={false}
+            />
           </>
         )}
       </fieldset>

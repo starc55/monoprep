@@ -32,6 +32,10 @@ const sourceOptions = [
   { value: "OFFICIAL", label: "Official Exam" },
 ];
 const OPTION_LABELS = ["A", "B", "C", "D"];
+const OPTION_FIELD_NAMES = OPTION_LABELS.flatMap((label) => [
+  `option${label}`,
+  `option${label}ImageUrl`,
+]);
 
 function toDateTimeLocal(value) {
   if (!value) return "";
@@ -55,6 +59,22 @@ function optionValues(question) {
     correctOption: String(correctValue).toUpperCase(),
     ...Object.fromEntries(OPTION_LABELS.map((label) => [`option${label}`, options.get(label)?.text || ""])),
     ...Object.fromEntries(OPTION_LABELS.map((label) => [`option${label}ImageUrl`, options.get(label)?.imageUrl || ""])),
+  };
+}
+
+function editAnswerChoiceRules(form) {
+  return {
+    validate: (value) => !form.getValues("hasAnswerChoices")
+      || String(value || "").trim().length > 0
+      || "Answer choice is required.",
+  };
+}
+
+function editAcceptedAnswerRules(form) {
+  return {
+    validate: (value) => form.getValues("hasAnswerChoices")
+      || String(value || "").split(",").some((answer) => answer.trim())
+      || "Enter at least one accepted answer.",
   };
 }
 
@@ -105,16 +125,29 @@ export default function AdminExamsPage({ mode = "admin" }) {
 
   useEffect(() => {
     if (questionHasAnswerChoices === false) {
-      OPTION_LABELS.flatMap((label) => [`option${label}`, `option${label}ImageUrl`]).forEach((name) => {
-        questionForm.unregister(name, { keepValue: true, keepDefaultValue: true });
-      });
-      questionForm.clearErrors([...OPTION_LABELS.map((label) => `option${label}`), "correctOption"]);
+      questionForm.unregister(OPTION_FIELD_NAMES);
+      questionForm.clearErrors([...OPTION_FIELD_NAMES, "correctOption"]);
       return;
     }
 
-    questionForm.unregister("acceptedAnswers", { keepValue: true, keepDefaultValue: true });
+    questionForm.unregister("acceptedAnswers");
     questionForm.clearErrors("acceptedAnswers");
   }, [questionForm, questionHasAnswerChoices]);
+
+  function changeQuestionAnswerMode(hasAnswerChoices) {
+    if (hasAnswerChoices) {
+      questionForm.unregister("acceptedAnswers");
+      questionForm.clearErrors("acceptedAnswers");
+    } else {
+      questionForm.unregister(OPTION_FIELD_NAMES);
+      questionForm.clearErrors([...OPTION_FIELD_NAMES, "correctOption"]);
+    }
+
+    questionForm.setValue("hasAnswerChoices", hasAnswerChoices, {
+      shouldDirty: true,
+      shouldValidate: false,
+    });
+  }
 
   async function load() {
     const [examRows, passageRows] = await Promise.all([getExams(), getPassages()]);
@@ -508,9 +541,19 @@ export default function AdminExamsPage({ mode = "admin" }) {
             </fieldset>
           ) : null}
           <QuestionEditorImageField form={questionForm} fieldName="imageUrl" label="Question image" alt="Question image preview" uploadingImageField={editingImageField} onImageUpload={handleQuestionEditorImageUpload} />
-          <RichMathEditor form={questionForm} name="questionText" label="Question text" className="question-author-text" placeholder={'Write text and formulas, for example: \\(f(x)=a^x+b\\)'} rules={{ required: true, minLength: 3 }} showMathTemplates />
+          <RichMathEditor
+            form={questionForm}
+            name="questionText"
+            label="Question text"
+            className="question-author-text"
+            placeholder={editingQuestion?.sectionType === "math"
+              ? 'Write text and formulas, for example: \\(f(x)=a^x+b\\)'
+              : "Write the Reading & Writing question prompt."}
+            rules={{ required: true, minLength: 3 }}
+            showMathTemplates={editingQuestion?.sectionType === "math"}
+          />
           {editingQuestion?.sectionType === "math" ? <p className="builder-default-note">Insert formulas directly in the question text. Students always receive the built-in SAT Math reference sheet.</p> : null}
-          <label className="question-answer-mode-toggle"><input type="checkbox" {...questionForm.register("hasAnswerChoices")} /><span aria-hidden="true" /><div><b>Multiple-choice answers</b><small>Turn off for a typed student response.</small></div></label>
+          <label className="question-answer-mode-toggle"><input type="checkbox" {...questionForm.register("hasAnswerChoices")} onChange={(event) => changeQuestionAnswerMode(event.target.checked)} /><span aria-hidden="true" /><div><b>Multiple-choice answers</b><small>Turn off for a typed student response.</small></div></label>
           {questionForm.watch("hasAnswerChoices") ? (
             <AnswerOptionEditors
               form={questionForm}
@@ -518,7 +561,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
               onImageUpload={handleQuestionEditorImageUpload}
               mathEnabled={editingQuestion?.sectionType === "math"}
             />
-          ) : <label className="form-field"><span>Accepted answers (comma separated)</span><input placeholder="3, 3.0, 6/2" {...questionForm.register("acceptedAnswers", { required: true })} /></label>}
+          ) : <label className="form-field"><span>Accepted answers (comma separated)</span><input placeholder="3, 3.0, 6/2" {...questionForm.register("acceptedAnswers", editAcceptedAnswerRules(questionForm))} /></label>}
           <div className="crm-form-row crm-form-row-three"><label className="form-field"><span>Skill</span><input {...questionForm.register("skill", { required: true, minLength: 2 })} /></label><div className="form-field"><span>Difficulty</span><PremiumSelect ariaLabel="Difficulty" value={questionForm.watch("difficulty")} onChange={(value) => questionForm.setValue("difficulty", value)} options={[{ value: "EASY", label: "Easy" }, { value: "MEDIUM", label: "Medium" }, { value: "HARD", label: "Hard" }]} /></div><label className="form-field"><span>Order</span><input type="number" min="0" {...questionForm.register("order", { required: true, min: 0 })} /></label></div>
           <RichMathEditor
             form={questionForm}
@@ -613,7 +656,7 @@ function AnswerOptionEditors({ form, uploadingImageField, onImageUpload, mathEna
                 label={`Answer ${label}`}
                 className="option-rich-math-editor"
                 placeholder={`Write answer ${label} with text or formulas.`}
-                rules={{ required: true }}
+                rules={editAnswerChoiceRules(form)}
                 showMathTemplates={mathEnabled}
               />
               <QuestionEditorImageField

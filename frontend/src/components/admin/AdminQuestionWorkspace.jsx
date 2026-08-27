@@ -50,6 +50,42 @@ const OPTION_FIELD_NAMES = ['A', 'B', 'C', 'D'].flatMap((label) => [
   `option${label}`,
   `option${label}ImageUrl`
 ]);
+
+function unregisterInactiveAnswerFields(form, responseType) {
+  if (responseType === 'text_input') {
+    form.unregister(OPTION_FIELD_NAMES);
+    form.clearErrors([...OPTION_FIELD_NAMES, 'correctOption']);
+    return;
+  }
+
+  form.unregister('acceptedAnswers');
+  form.clearErrors('acceptedAnswers');
+}
+
+function changeResponseType(form, responseType) {
+  unregisterInactiveAnswerFields(form, responseType);
+  form.setValue('responseType', responseType, {
+    shouldDirty: true,
+    shouldValidate: false
+  });
+}
+
+function answerChoiceRules(form) {
+  return {
+    validate: (value) => form.getValues('responseType') === 'text_input'
+      || String(value || '').trim().length > 0
+      || 'Answer choice is required.'
+  };
+}
+
+function acceptedAnswerRules(form) {
+  return {
+    validate: (value) => form.getValues('responseType') !== 'text_input'
+      || splitAnswers(String(value || '')).length > 0
+      || 'Enter at least one accepted answer.'
+  };
+}
+
 function getSkills(sectionType) {
   if (sectionType === 'reading_writing') return READING_SKILLS;
   if (sectionType === 'math') return MATH_SKILLS;
@@ -116,12 +152,13 @@ function parseTableData(value) {
 }
 
 function buildOptions(values = {}) {
+  const correctOption = String(values.correctOption || '').trim().toUpperCase();
   return ['A', 'B', 'C', 'D']
     .map((label, index) => ({
       label,
       text: values[`option${label}`]?.trim() || '',
       imageUrl: values[`option${label}ImageUrl`]?.trim() || null,
-      isCorrect: values.correctOption.trim().toUpperCase() === label,
+      isCorrect: correctOption === label,
       order: index + 1
     }))
     .filter((option) => option.text);
@@ -181,21 +218,8 @@ export default function AdminQuestionWorkspace({
   const skills = getSkills(sectionType);
 
   useEffect(() => {
-    if (isTextResponse) {
-      OPTION_FIELD_NAMES.forEach((name) => form.unregister(name, {
-        keepValue: true,
-        keepDefaultValue: true
-      }));
-      form.clearErrors([...OPTION_FIELD_NAMES, 'correctOption']);
-      return;
-    }
-
-    form.unregister('acceptedAnswers', {
-      keepValue: true,
-      keepDefaultValue: true
-    });
-    form.clearErrors('acceptedAnswers');
-  }, [form, isTextResponse]);
+    unregisterInactiveAnswerFields(form, responseType);
+  }, [form, responseType]);
 
   useEffect(() => {
     if (!sections.length) {
@@ -256,6 +280,7 @@ export default function AdminQuestionWorkspace({
       skill: 'skill',
       explanation: 'explanation',
       order: 'question order',
+      acceptedAnswers: 'accepted answer',
       optionA: 'answer A',
       optionB: 'answer B',
       optionC: 'answer C',
@@ -352,9 +377,11 @@ export default function AdminQuestionWorkspace({
 
   async function handleSaveQuestion(submittedValues) {
     if (!activeSection) return;
-    const options = buildOptions(submittedValues);
+    const options = usesOptions ? buildOptions(submittedValues) : [];
     const acceptedAnswers = splitAnswers(submittedValues.acceptedAnswers || '');
-    const correctLabel = submittedValues.correctOption.trim().toUpperCase();
+    const correctLabel = usesOptions
+      ? String(submittedValues.correctOption || '').trim().toUpperCase()
+      : '';
 
     if (usesOptions && options.length !== 4) {
       setStatus({ type: 'error', message: 'Provide all four answer choices for SAT multiple choice items.' });
@@ -742,7 +769,7 @@ function MathFields({ form, isTextResponse, imageUrl, imageUploading, onImageUpl
             ariaLabel="Response type"
             value={responseType}
             options={RESPONSE_TYPE_OPTIONS}
-            onChange={(value) => form.setValue('responseType', value, { shouldDirty: true })}
+            onChange={(value) => changeResponseType(form, value)}
           />
         </div>
       </QuestionPromptFields>
@@ -797,7 +824,7 @@ function CustomFields({ form }) {
             ariaLabel="Response type"
             value={responseType}
             options={RESPONSE_TYPE_OPTIONS}
-            onChange={(value) => form.setValue('responseType', value, { shouldDirty: true })}
+            onChange={(value) => changeResponseType(form, value)}
           />
         </div>
       </QuestionPromptFields>
@@ -883,13 +910,13 @@ function CommonAnswerFields({
                       label={`Answer ${label}`}
                       className="option-rich-math-editor"
                       placeholder={`Write answer ${label} with text or formulas.`}
-                      rules={{ required: true }}
+                      rules={answerChoiceRules(form)}
                       showMathTemplates
                     />
                   ) : (
                     <label className="form-field">
                       <span>Answer text</span>
-                      <input {...form.register(`option${label}`, { required: true })} />
+                      <input {...form.register(`option${label}`, answerChoiceRules(form))} />
                     </label>
                   )}
                   {mathEnabled ? (
@@ -926,7 +953,7 @@ function CommonAnswerFields({
       ) : (
         <label className="form-field">
           <span>Accepted answers (comma separated)</span>
-          <input placeholder="3, 3.0, 6/2" {...form.register('acceptedAnswers', { required: isTextResponse })} />
+          <input placeholder="3, 3.0, 6/2" {...form.register('acceptedAnswers', acceptedAnswerRules(form))} />
         </label>
       )}
       <RichMathEditor

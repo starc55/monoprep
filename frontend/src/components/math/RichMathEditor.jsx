@@ -151,10 +151,7 @@ export default function RichMathEditor({
   useEffect(() => {
     form.register(name, rules);
     return () => {
-      form.unregister(name, {
-        keepValue: true,
-        keepDefaultValue: true
-      });
+      form.unregister(name);
     };
   }, [form, name]);
 

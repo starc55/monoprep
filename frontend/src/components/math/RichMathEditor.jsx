@@ -146,8 +146,17 @@ export default function RichMathEditor({
   const editorRef = useRef(null);
   const selectionRef = useRef(null);
   const lastEmittedValueRef = useRef(null);
-  form.register(name, rules);
   const value = form.watch(name) || '';
+
+  useEffect(() => {
+    form.register(name, rules);
+    return () => {
+      form.unregister(name, {
+        keepValue: true,
+        keepDefaultValue: true
+      });
+    };
+  }, [form, name]);
 
   const syncEditor = useCallback(() => {
     const editor = editorRef.current;

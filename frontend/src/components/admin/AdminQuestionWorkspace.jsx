@@ -46,6 +46,10 @@ const DIFFICULTY_OPTIONS = [
   { value: 'MEDIUM', label: 'Medium' },
   { value: 'HARD', label: 'Hard' }
 ];
+const OPTION_FIELD_NAMES = ['A', 'B', 'C', 'D'].flatMap((label) => [
+  `option${label}`,
+  `option${label}ImageUrl`
+]);
 function getSkills(sectionType) {
   if (sectionType === 'reading_writing') return READING_SKILLS;
   if (sectionType === 'math') return MATH_SKILLS;
@@ -175,6 +179,23 @@ export default function AdminQuestionWorkspace({
   const isTextResponse = responseType === 'text_input';
   const usesOptions = !isTextResponse;
   const skills = getSkills(sectionType);
+
+  useEffect(() => {
+    if (isTextResponse) {
+      OPTION_FIELD_NAMES.forEach((name) => form.unregister(name, {
+        keepValue: true,
+        keepDefaultValue: true
+      }));
+      form.clearErrors([...OPTION_FIELD_NAMES, 'correctOption']);
+      return;
+    }
+
+    form.unregister('acceptedAnswers', {
+      keepValue: true,
+      keepDefaultValue: true
+    });
+    form.clearErrors('acceptedAnswers');
+  }, [form, isTextResponse]);
 
   useEffect(() => {
     if (!sections.length) {
@@ -726,14 +747,8 @@ function MathFields({ form, isTextResponse, imageUrl, imageUploading, onImageUpl
         </div>
       </QuestionPromptFields>
       <fieldset className="editor-panel reference-editor">
-        <legend>Reference & Media</legend>
-        <RichMathEditor
-          form={form}
-          name="formulaText"
-          label="Question formula (optional)"
-          placeholder="Formula shown with this question only, for example: \\[y=mx+b\\]"
-          showMathTemplates
-        />
+        <legend>Question media</legend>
+        <p className="helper-copy">Add formulas directly inside the question text. The official SAT Math reference sheet is included automatically for students.</p>
         <label className="form-field media-upload-field">
           <span>Upload graph or image</span>
           <input

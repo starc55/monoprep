@@ -101,6 +101,20 @@ export default function AdminExamsPage({ mode = "admin" }) {
       optionC: "", optionCImageUrl: "", optionD: "", optionDImageUrl: "",
     },
   });
+  const questionHasAnswerChoices = questionForm.watch("hasAnswerChoices");
+
+  useEffect(() => {
+    if (questionHasAnswerChoices === false) {
+      OPTION_LABELS.flatMap((label) => [`option${label}`, `option${label}ImageUrl`]).forEach((name) => {
+        questionForm.unregister(name, { keepValue: true, keepDefaultValue: true });
+      });
+      questionForm.clearErrors([...OPTION_LABELS.map((label) => `option${label}`), "correctOption"]);
+      return;
+    }
+
+    questionForm.unregister("acceptedAnswers", { keepValue: true, keepDefaultValue: true });
+    questionForm.clearErrors("acceptedAnswers");
+  }, [questionForm, questionHasAnswerChoices]);
 
   async function load() {
     const [examRows, passageRows] = await Promise.all([getExams(), getPassages()]);
@@ -495,7 +509,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
           ) : null}
           <QuestionEditorImageField form={questionForm} fieldName="imageUrl" label="Question image" alt="Question image preview" uploadingImageField={editingImageField} onImageUpload={handleQuestionEditorImageUpload} />
           <RichMathEditor form={questionForm} name="questionText" label="Question text" className="question-author-text" placeholder={'Write text and formulas, for example: \\(f(x)=a^x+b\\)'} rules={{ required: true, minLength: 3 }} showMathTemplates />
-          <RichMathEditor form={questionForm} name="formulaText" label="Question formula (optional)" placeholder="Formula shown with this question only" showMathTemplates />
+          {editingQuestion?.sectionType === "math" ? <p className="builder-default-note">Insert formulas directly in the question text. Students always receive the built-in SAT Math reference sheet.</p> : null}
           <label className="question-answer-mode-toggle"><input type="checkbox" {...questionForm.register("hasAnswerChoices")} /><span aria-hidden="true" /><div><b>Multiple-choice answers</b><small>Turn off for a typed student response.</small></div></label>
           {questionForm.watch("hasAnswerChoices") ? (
             <AnswerOptionEditors

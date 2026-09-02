@@ -31,7 +31,7 @@ export default function DesmosGraphingCalculator() {
 
   useEffect(() => {
     let active = true;
-    const apiKey = import.meta.env.VITE_DESMOS_API_KEY || (import.meta.env.DEV ? DESMOS_DEMO_KEY : '');
+    const apiKey = import.meta.env.VITE_DESMOS_API_KEY || DESMOS_DEMO_KEY;
 
     if (!apiKey) {
       setFallback(true);

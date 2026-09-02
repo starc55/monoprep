@@ -10,6 +10,11 @@ export async function saveAnswer(attemptId, payload) {
   return data.answer;
 }
 
+export async function completeAttemptSection(attemptId, sectionId) {
+  const { data } = await api.post(`/attempts/${attemptId}/sections/${sectionId}/complete`);
+  return data.attempt;
+}
+
 export async function submitAttempt(attemptId) {
   const { data } = await api.post(`/attempts/${attemptId}/submit`);
   return data.attempt;

@@ -10,6 +10,74 @@ function getActiveSections(sections = []) {
   return sections.filter((section) => section.type !== "listening");
 }
 
+function getRoutedSections(sections = [], selectedRoutes) {
+  const activeSections = getActiveSections(sections);
+  if (selectedRoutes === undefined || selectedRoutes === null) {
+    return activeSections;
+  }
+
+  return activeSections.filter((section) => {
+    const role = section.adaptiveRole || "STANDARD";
+    if (role === "STANDARD" || role === "MODULE_1") return true;
+    const selectedRoute = selectedRoutes?.[section.type];
+    return role === `MODULE_2_${selectedRoute}`;
+  });
+}
+
+function getExamTestingDuration(exam) {
+  const activeSections = getActiveSections(exam?.sections || []);
+  const fixedDuration = activeSections
+    .filter((section) => !String(section.adaptiveRole || "STANDARD").startsWith("MODULE_2_"))
+    .reduce((total, section) => total + Math.max(0, Number(section.duration) || 0), 0);
+  const branchDurations = new Map();
+
+  activeSections
+    .filter((section) => String(section.adaptiveRole || "").startsWith("MODULE_2_"))
+    .forEach((section) => {
+      const duration = Math.max(0, Number(section.duration) || 0);
+      const current = branchDurations.get(section.type) || {};
+      current[section.adaptiveRole] = (current[section.adaptiveRole] || 0) + duration;
+      branchDurations.set(section.type, current);
+    });
+
+  const adaptiveDuration = [...branchDurations.values()].reduce(
+    (total, branches) => total + Math.max(0, ...Object.values(branches)),
+    0
+  );
+  return Math.max(fixedDuration + adaptiveDuration, Math.max(0, Number(exam?.totalDuration) || 0));
+}
+
+function resolveSelectedRoutes(sections, answers, existingRoutes = {}) {
+  const routes = { ...(existingRoutes || {}) };
+  const answersByQuestionId = new Map(answers.map((answer) => [answer.questionId, answer]));
+  const moduleOneSections = getActiveSections(sections).filter(
+    (section) => (section.adaptiveRole || "STANDARD") === "MODULE_1"
+  );
+
+  moduleOneSections.forEach((section) => {
+    if (routes[section.type]) return;
+    const hasAdaptiveBranch = sections.some(
+      (candidate) => candidate.type === section.type
+        && String(candidate.adaptiveRole || "").startsWith("MODULE_2_")
+    );
+    if (!hasAdaptiveBranch) return;
+
+    const scoredQuestions = (section.questions || []).filter((question) => !question.isPretest);
+    const correct = scoredQuestions.filter((question) =>
+      evaluateAnswer(question, answersByQuestionId.get(question.id)?.answer)
+    ).length;
+    const accuracy = scoredQuestions.length ? (correct / scoredQuestions.length) * 100 : 0;
+    const routingThreshold = section.routingThreshold === null || section.routingThreshold === undefined
+      ? 60
+      : Number(section.routingThreshold);
+    routes[section.type] = accuracy >= routingThreshold
+      ? "HIGHER"
+      : "LOWER";
+  });
+
+  return routes;
+}
+
 function sanitizeQuestion(question, includeCorrectAnswers = false) {
   return {
     id: question.id,
@@ -23,10 +91,12 @@ function sanitizeQuestion(question, includeCorrectAnswers = false) {
     audioTitle: question.audioTitle,
     instructions: question.instructions,
     imageUrl: question.imageUrl,
+    imagePlacement: question.imagePlacement,
     formulaText: question.formulaText,
     tableData: question.tableData,
     calculatorAllowed: question.calculatorAllowed,
     audioReplayLimit: question.audioReplayLimit,
+    ...(includeCorrectAnswers ? { isPretest: Boolean(question.isPretest) } : {}),
     order: question.order,
     passage: question.passage,
     options: (question.options || []).map((option) => ({
@@ -51,9 +121,10 @@ function sanitizeQuestion(question, includeCorrectAnswers = false) {
 function sanitizeExam(
   exam,
   includeQuestions = true,
-  includeCorrectAnswers = false
+  includeCorrectAnswers = false,
+  selectedRoutes
 ) {
-  const activeSections = getActiveSections(exam.sections || []);
+  const activeSections = getRoutedSections(exam.sections || [], selectedRoutes);
   const lastAttempt = Array.isArray(exam.attempts) ? exam.attempts[0] : null;
 
   return {
@@ -71,6 +142,7 @@ function sanitizeExam(
     premium: exam.accessType === "PAID",
     isPremium: exam.accessType === "PAID",
     totalDuration: exam.totalDuration,
+    scoringModel: exam.scoringModel || "SAT_ESTIMATE_V1",
     isPublished: exam.isPublished,
     createdAt: exam.createdAt,
     updatedAt: exam.updatedAt,
@@ -85,6 +157,8 @@ function sanitizeExam(
       type: section.type,
       duration: section.duration,
       order: section.order,
+      adaptiveRole: section.adaptiveRole || "STANDARD",
+      routingThreshold: section.routingThreshold ?? 60,
       questionsCount: section._count?.questions ?? section.questions?.length ?? 0,
       questions: includeQuestions
         ? (section.questions || []).map((question) =>
@@ -131,14 +205,7 @@ function assertCompetitionAccess(exam, user) {
 }
 
 function getAttemptDeadline(attempt) {
-  const sectionDuration = getActiveSections(attempt.exam?.sections || []).reduce(
-    (total, section) => total + Math.max(0, Number(section.duration) || 0),
-    0
-  );
-  const examDuration = Math.max(
-    sectionDuration,
-    Math.max(0, Number(attempt.exam?.totalDuration) || 0)
-  );
+  const examDuration = getExamTestingDuration(attempt.exam);
   if (!examDuration || !attempt.startedAt) {
     return null;
   }
@@ -346,7 +413,7 @@ export async function saveAttemptAnswer(attemptId, userId, payload) {
   }
   assertAttemptAcceptsAnswers(attempt);
 
-  const question = getActiveSections(attempt.exam.sections)
+  const question = getRoutedSections(attempt.exam.sections, attempt.selectedRoutes || {})
     .flatMap((section) => section.questions)
     .find((entry) => entry.id === payload.questionId);
 
@@ -376,6 +443,45 @@ export async function saveAttemptAnswer(attemptId, userId, payload) {
   });
 
   return mapAnswer(saved);
+}
+
+export async function completeAttemptSection(attemptId, sectionId, userId) {
+  const attempt = await prisma.attempt.findUnique({
+    where: { id: attemptId },
+    include: attemptReviewInclude,
+  });
+
+  if (!attempt || attempt.userId !== userId) {
+    throw new ApiError(404, "Attempt not found.");
+  }
+  if (attempt.status !== "IN_PROGRESS") {
+    throw new ApiError(400, "This attempt has already been submitted.");
+  }
+  assertAttemptAcceptsAnswers(attempt);
+
+  const visibleSection = getRoutedSections(
+    attempt.exam.sections,
+    attempt.selectedRoutes || {}
+  ).find((section) => section.id === sectionId);
+  if (!visibleSection) {
+    throw new ApiError(404, "Section not found in the active exam route.");
+  }
+
+  if ((visibleSection.adaptiveRole || "STANDARD") !== "MODULE_1") {
+    return buildAttemptResponse(attempt, false);
+  }
+
+  const selectedRoutes = resolveSelectedRoutes(
+    attempt.exam.sections,
+    attempt.answers,
+    attempt.selectedRoutes || {}
+  );
+  const updatedAttempt = await prisma.attempt.update({
+    where: { id: attemptId },
+    data: { selectedRoutes },
+    include: attemptReviewInclude,
+  });
+  return buildAttemptResponse(updatedAttempt, false);
 }
 
 function buildQuestionAnalysis(questionResults) {
@@ -504,7 +610,12 @@ export async function submitAttempt(attemptId, userId) {
     const answersByQuestionId = new Map(
       attempt.answers.map((answer) => [answer.questionId, answer])
     );
-    const questionResults = getActiveSections(attempt.exam.sections).flatMap((section) =>
+    const selectedRoutes = resolveSelectedRoutes(
+      attempt.exam.sections,
+      attempt.answers,
+      attempt.selectedRoutes || {}
+    );
+    const questionResults = getRoutedSections(attempt.exam.sections, selectedRoutes).flatMap((section) =>
       section.questions.map((question) => {
         const savedAnswer = answersByQuestionId.get(question.id);
         return {
@@ -515,7 +626,7 @@ export async function submitAttempt(attemptId, userId) {
         };
       })
     );
-    const scoreSummary = buildScoreSummary(attempt.exam, questionResults);
+    const scoreSummary = buildScoreSummary(attempt.exam, questionResults, { selectedRoutes });
     const previousBestAttempt = await tx.attempt.findFirst({
       where: {
         userId,
@@ -555,6 +666,7 @@ export async function submitAttempt(attemptId, userId) {
         readingWritingScore: scoreSummary.readingWritingScore,
         mathScore: scoreSummary.mathScore,
         listeningScore: scoreSummary.listeningScore,
+        selectedRoutes,
       },
     });
 
@@ -566,7 +678,11 @@ export async function submitAttempt(attemptId, userId) {
       return { updatedAttempt: currentAttempt, previousBestAttempt: null, didSubmit: false };
     }
 
-    await updateSkillStats(userId, questionResults, tx);
+    await updateSkillStats(
+      userId,
+      questionResults.filter((item) => !item.question.isPretest),
+      tx
+    );
     const updatedAttempt = await tx.attempt.findUnique({
       where: { id: attemptId },
       include: attemptReviewInclude,
@@ -674,6 +790,8 @@ export async function listAttemptsForUser(userId) {
     readingWritingScore: attempt.readingWritingScore,
     mathScore: attempt.mathScore,
     listeningScore: attempt.listeningScore,
+    scoringModel: attempt.exam.scoringModel || "SAT_ESTIMATE_V1",
+    scoreIsEstimated: (attempt.exam.scoringModel || "SAT_ESTIMATE_V1") === "SAT_ESTIMATE_V1",
     timeSpent: attempt.timeSpent,
     answersCount: attempt.answers.length,
     hasAiFeedback: Boolean(attempt.aiFeedback),
@@ -729,7 +847,8 @@ export function buildAttemptSummaryForAI(attemptResponse) {
 }
 
 export function buildAttemptResponse(attempt, includeCorrectAnswers) {
-  const exam = sanitizeExam(attempt.exam, true, includeCorrectAnswers);
+  const selectedRoutes = attempt.selectedRoutes || {};
+  const exam = sanitizeExam(attempt.exam, true, includeCorrectAnswers, selectedRoutes);
   const deadline = getAttemptDeadline(attempt);
 
   return {
@@ -745,6 +864,9 @@ export function buildAttemptResponse(attempt, includeCorrectAnswers) {
     readingWritingScore: attempt.readingWritingScore,
     mathScore: attempt.mathScore,
     listeningScore: attempt.listeningScore,
+    selectedRoutes,
+    scoringModel: attempt.exam?.scoringModel || "SAT_ESTIMATE_V1",
+    scoreIsEstimated: (attempt.exam?.scoringModel || "SAT_ESTIMATE_V1") === "SAT_ESTIMATE_V1",
     timeSpent: attempt.timeSpent,
     exam,
     answers: attempt.answers.map(mapAnswer),

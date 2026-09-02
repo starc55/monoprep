@@ -1,11 +1,12 @@
 import { useForm } from "react-hook-form";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import AuthLayout from "../layouts/AuthLayout.jsx";
 import Button from "../components/ui/Button.jsx";
 import { useAuthStore } from "../store/authStore.js";
 import { useI18n } from "../i18n/I18nProvider.jsx";
 import { FcGoogle } from "react-icons/fc";
+import "../styles/pages/legal.css";
 
 export default function RegisterPage() {
   const navigate = useNavigate();
@@ -56,7 +57,8 @@ export default function RegisterPage() {
         animate={{ opacity: 1, y: 0 }}
         onSubmit={handleSubmit(async (values) => {
           try {
-            const result = await registerUser(values);
+            const { acceptedPolicies: _acceptedPolicies, ...registrationValues } = values;
+            const result = await registerUser(registrationValues);
             if (result.user) {
               navigate("/dashboard");
             }
@@ -94,6 +96,18 @@ export default function RegisterPage() {
           <p className="form-error">{errors.confirmPassword.message}</p>
         ) : null}
         {error ? <p className="form-error">{error}</p> : null}
+        <label className="legal-consent">
+          <input
+            type="checkbox"
+            {...register("acceptedPolicies", {
+              required: "You must accept the Terms of Use and Privacy Policy.",
+            })}
+          />
+          <span>
+            I agree to the <Link to="/legal/terms" target="_blank">Terms of Use</Link> and <Link to="/legal/privacy" target="_blank">Privacy Policy</Link>.
+          </span>
+        </label>
+        {errors.acceptedPolicies ? <p className="form-error">{errors.acceptedPolicies.message}</p> : null}
         <Button type="submit" disabled={loading}>
           {loading ? "Creating account..." : "Create account"}
         </Button>
@@ -113,6 +127,7 @@ export default function RegisterPage() {
             <FcGoogle size={24} />
           </span>
         </Button>
+        <p className="legal-consent">Continuing with Google means you accept the <Link to="/legal/terms" target="_blank">Terms of Use</Link> and <Link to="/legal/privacy" target="_blank">Privacy Policy</Link>.</p>
       </motion.form>
     </AuthLayout>
   );

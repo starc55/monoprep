@@ -86,6 +86,8 @@ export default function PassagePanel({ question, attemptId, sectionType }) {
   const [highlights, setHighlights] = useState(() => readHighlights(storageKey));
   const [selectionRange, setSelectionRange] = useState(null);
   const tokens = useMemo(() => tokenize(question?.passage?.content || ''), [question?.passage?.content]);
+  const passageTitle = String(question?.passage?.title || '').trim();
+  const showPassageTitle = passageTitle && !/^untitled passage$/i.test(passageTitle);
 
   useEffect(() => {
     setHighlights(readHighlights(storageKey));
@@ -168,19 +170,39 @@ export default function PassagePanel({ question, attemptId, sectionType }) {
   if (!question?.passage) {
     if (sectionType === 'math') {
       return (
-        <aside className="passage-panel math-directions-panel" aria-label="Math test directions">
-          <span className="passage-category">SAT Math</span>
-          <h2>Directions</h2>
-          <p>Use the information in the question to determine the best answer.</p>
+        <aside className="passage-panel math-directions-panel" aria-label="Student-produced response directions">
+          <h2>Student-produced response directions</h2>
           <ul>
-            <li>For multiple-choice questions, select one answer choice.</li>
-            <li>For student-produced responses, enter an integer, decimal, or fraction as requested.</li>
-            <li>You may use the Desmos calculator and the shared reference sheet when they are available.</li>
-            <li>Your answer is saved automatically when you move to another question.</li>
+            <li>If you find <strong>more than one correct answer</strong>, enter only one answer.</li>
+            <li>You can enter up to 5 characters for a <strong>positive</strong> answer and up to 6 characters (including the negative sign) for a <strong>negative</strong> answer.</li>
+            <li>If your answer is a <strong>fraction</strong> that does not fit in the provided space, enter the decimal equivalent.</li>
+            <li>If your answer is a <strong>decimal</strong> that does not fit in the provided space, enter it by truncating or rounding at the fourth digit.</li>
+            <li>If your answer is a <strong>mixed number</strong> (such as 3 1/2), enter it as an improper fraction (7/2) or its decimal equivalent (3.5).</li>
+            <li>Do not enter symbols such as a percent sign, comma, or dollar sign.</li>
           </ul>
-          <div className="math-answer-format-note">
-            <strong>Accepted response formats</strong>
-            <span>3.5 &nbsp; 3/2 &nbsp; -0.75</span>
+          <div className="response-examples">
+            <strong className="response-examples-title">Examples</strong>
+            <table>
+              <thead>
+                <tr>
+                  <th>Answer</th>
+                  <th>Acceptable ways to enter answer</th>
+                  <th>Unacceptable: will NOT receive credit</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <th scope="row">3.5</th>
+                  <td><code>3.5</code><code>3.50</code><code>7/2</code></td>
+                  <td><code>31/2</code><code>3 1/2</code></td>
+                </tr>
+                <tr>
+                  <th scope="row">2/3</th>
+                  <td><code>2/3</code><code>.6666</code><code>.6667</code><code>0.666</code><code>0.667</code></td>
+                  <td><code>0.66</code><code>.66</code><code>0.67</code><code>.67</code></td>
+                </tr>
+              </tbody>
+            </table>
           </div>
         </aside>
       );
@@ -198,14 +220,14 @@ export default function PassagePanel({ question, attemptId, sectionType }) {
       <div className="passage-mobile-head">
         <div>
           <span className="passage-category">{question.passage.category}</span>
-          <h2>{question.passage.title}</h2>
+          {showPassageTitle ? <h2>{passageTitle}</h2> : null}
         </div>
         <button type="button" onClick={() => setCollapsed((value) => !value)}>
           {collapsed ? 'Show' : 'Hide'}
         </button>
       </div>
       <div className="passage-content highlightable-passage" ref={panelRef} onMouseUp={handleMouseUp}>
-        <PassageAssetViewer passage={question.passage} />
+        <PassageAssetViewer passage={question.passage} seamless />
         {question.passage.content ? (
           <p>
             {tokens.map(({ token, key, wordIndex, isSpace, italic, underline }) => {

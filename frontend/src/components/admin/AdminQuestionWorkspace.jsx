@@ -9,30 +9,12 @@ import PassageAssetViewer from '../exam/PassageAssetViewer.jsx';
 import RichMathEditor from '../math/RichMathEditor.jsx';
 import PremiumSelect from '../ui/PremiumSelect.jsx';
 import { getApiErrorMessage } from '../../utils/apiError.js';
+import {
+  getQuestionHubDomains,
+  getQuestionHubSkills
+} from '../../constants/questionHubCatalog.js';
 
-const READING_SKILLS = [
-  'vocabulary', 'transitions', 'command_of_evidence', 'inference',
-  'grammar', 'punctuation', 'rhetoric', 'main_idea'
-];
-const MATH_SKILLS = [
-  'linear_equations', 'systems', 'functions', 'geometry', 'trigonometry',
-  'statistics', 'probability', 'advanced_math', 'problem_solving'
-];
 const DEFAULT_SKILLS = ['reading', 'writing', 'algebra', 'analysis'];
-const QUESTION_HUB_TOPICS = {
-  reading_writing: [
-    'Information and Ideas',
-    'Craft and Structure',
-    'Expression of Ideas',
-    'Standard English Conventions'
-  ],
-  math: [
-    'Algebra',
-    'Advanced Math',
-    'Problem-Solving and Data Analysis',
-    'Geometry and Trigonometry'
-  ]
-};
 const PASSAGE_MODE_OPTIONS = [
   { value: 'new', label: 'Write new passage' },
   { value: 'existing', label: 'Use saved passage' }
@@ -70,11 +52,12 @@ function changeResponseType(form, responseType) {
   });
 }
 
-function answerChoiceRules(form) {
+function answerChoiceRules(form, label) {
   return {
     validate: (value) => form.getValues('responseType') === 'text_input'
       || String(value || '').trim().length > 0
-      || 'Answer choice is required.'
+      || Boolean(form.getValues(`option${label}ImageUrl`))
+      || 'Add answer text or an image.'
   };
 }
 
@@ -86,10 +69,11 @@ function acceptedAnswerRules(form) {
   };
 }
 
-function getSkills(sectionType) {
-  if (sectionType === 'reading_writing') return READING_SKILLS;
-  if (sectionType === 'math') return MATH_SKILLS;
-  return DEFAULT_SKILLS;
+function getDefaultClassification(sectionType) {
+  const domains = getQuestionHubDomains(sectionType);
+  const domain = domains[0]?.value || '';
+  const skill = getQuestionHubSkills(sectionType, domain)[0]?.value || DEFAULT_SKILLS[0];
+  return { domain, skill };
 }
 
 function titleForType(type) {
@@ -101,6 +85,7 @@ function titleForType(type) {
 }
 
 function getDefaults(section) {
+  const classification = getDefaultClassification(section?.type);
   return {
     sectionId: section?.id || '',
     passageMode: 'new',
@@ -112,13 +97,15 @@ function getDefaults(section) {
     passageAttachmentName: '',
     passageAttachmentMimeType: '',
     responseType: 'single_choice',
-    skill: getSkills(section?.type)[0],
+    skill: classification.skill,
     addToQuestionHub: false,
-    questionHubDomain: (QUESTION_HUB_TOPICS[section?.type] || [])[0] || '',
+    questionHubDomain: classification.domain,
     difficulty: 'MEDIUM',
+    isPretest: false,
     questionText: '',
     formulaText: '',
     imageUrl: '',
+    imagePlacement: 'ABOVE',
     tableData: '',
     calculatorAllowed: section?.type === 'math',
     audioUrl: '',
@@ -161,7 +148,7 @@ function buildOptions(values = {}) {
       isCorrect: correctOption === label,
       order: index + 1
     }))
-    .filter((option) => option.text);
+    .filter((option) => option.text || option.imageUrl);
 }
 
 export default function AdminQuestionWorkspace({
@@ -215,11 +202,32 @@ export default function AdminQuestionWorkspace({
     : values.responseType;
   const isTextResponse = responseType === 'text_input';
   const usesOptions = !isTextResponse;
-  const skills = getSkills(sectionType);
+  const questionHubDomains = useMemo(() => getQuestionHubDomains(sectionType), [sectionType]);
+  const catalogSkills = useMemo(
+    () => getQuestionHubSkills(sectionType, values.questionHubDomain),
+    [sectionType, values.questionHubDomain]
+  );
+  const skills = useMemo(
+    () => catalogSkills.length
+      ? catalogSkills
+      : DEFAULT_SKILLS.map((skill) => ({ value: skill, label: skill.replaceAll('_', ' ') })),
+    [catalogSkills]
+  );
 
   useEffect(() => {
     unregisterInactiveAnswerFields(form, responseType);
   }, [form, responseType]);
+
+  useEffect(() => {
+    if (!catalogSkills.length || catalogSkills.some((skill) => skill.value === values.skill)) return;
+    form.setValue('skill', catalogSkills[0].value, { shouldDirty: true });
+  }, [catalogSkills, form, values.skill]);
+
+  function selectQuestionHubDomain(domain) {
+    const nextSkill = getQuestionHubSkills(sectionType, domain)[0]?.value || values.skill;
+    form.setValue('questionHubDomain', domain, { shouldDirty: true });
+    form.setValue('skill', nextSkill, { shouldDirty: true });
+  }
 
   useEffect(() => {
     if (!sections.length) {
@@ -365,6 +373,7 @@ export default function AdminQuestionWorkspace({
       passage: sectionType === 'reading_writing' ? draftPassage : null,
       formulaText: values.formulaText || null,
       imageUrl: values.imageUrl || null,
+      imagePlacement: values.imagePlacement || 'ABOVE',
       tableData,
       calculatorAllowed: Boolean(values.calculatorAllowed),
       audioUrl: values.audioUrl || null,
@@ -393,6 +402,14 @@ export default function AdminQuestionWorkspace({
     }
     if (isTextResponse && acceptedAnswers.length === 0) {
       setStatus({ type: 'error', message: 'Enter at least one accepted numeric or text answer.' });
+      return;
+    }
+    const submittedCatalogSkills = getQuestionHubSkills(sectionType, submittedValues.questionHubDomain);
+    if (
+      submittedValues.addToQuestionHub
+      && !submittedCatalogSkills.some((skill) => skill.value === submittedValues.skill)
+    ) {
+      setStatus({ type: 'error', message: 'Choose a Question Hub domain and one of its available skills.' });
       return;
     }
     if (sectionType === 'reading_writing' && submittedValues.passageMode === 'existing' && !submittedValues.passageId) {
@@ -444,13 +461,15 @@ export default function AdminQuestionWorkspace({
           : responseType,
         skill: submittedValues.skill,
         difficulty: submittedValues.difficulty,
+        isPretest: Boolean(submittedValues.isPretest),
         questionText: submittedValues.questionText.trim(),
         audioUrl: null,
         audioTitle: null,
         instructions: null,
         transcript: null,
         audioReplayLimit: null,
-        imageUrl: sectionType === 'math' ? submittedValues.imageUrl || null : null,
+        imageUrl: submittedValues.imageUrl || null,
+        imagePlacement: submittedValues.imagePlacement || 'ABOVE',
         formulaText: sectionType === 'math' ? submittedValues.formulaText || null : null,
         tableData: sectionType === 'math' ? tableData : null,
         calculatorAllowed: sectionType === 'math' && Boolean(submittedValues.calculatorAllowed),
@@ -588,6 +607,9 @@ export default function AdminQuestionWorkspace({
                       uploadingPassageFile={uploadingPassageFile}
                       onPassageFileUpload={handlePassageFileUpload}
                       onClearPassageFile={clearPassageFile}
+                      imageUrl={values.imageUrl}
+                      imageUploading={uploadingImageField === 'imageUrl'}
+                      onImageUpload={(event) => handleImageUpload(event, 'imageUrl', 'Question image uploaded.')}
                     />
                   ) : null}
                   {sectionType === 'math' ? (
@@ -608,12 +630,14 @@ export default function AdminQuestionWorkspace({
                   ) : null}
                   <CommonAnswerFields
                     form={form}
+                    domains={questionHubDomains}
                     skills={skills}
                     values={values}
                     isTextResponse={isTextResponse}
                     usesOptions={usesOptions}
                     mathEnabled={sectionType === 'math'}
                     skillLabel="Skill"
+                    onDomainChange={selectQuestionHubDomain}
                     uploadingImageField={uploadingImageField}
                     onImageUpload={(event, fieldName, successMessage) => handleImageUpload(
                       event,
@@ -621,7 +645,7 @@ export default function AdminQuestionWorkspace({
                       successMessage
                     )}
                   />
-                  {QUESTION_HUB_TOPICS[sectionType]?.length ? (
+                  {questionHubDomains.length ? (
                     <section className={`question-hub-publish-panel ${values.addToQuestionHub ? 'active' : ''}`.trim()}>
                       <label className="question-hub-publish-toggle">
                         <input type="checkbox" {...form.register('addToQuestionHub')} />
@@ -632,14 +656,9 @@ export default function AdminQuestionWorkspace({
                         </div>
                       </label>
                       {values.addToQuestionHub ? (
-                        <div className="form-field question-hub-topic-field">
-                          <span>SAT topic</span>
-                          <PremiumSelect
-                            ariaLabel="Question Hub SAT topic"
-                            value={values.questionHubDomain}
-                            onChange={(value) => form.setValue('questionHubDomain', value, { shouldDirty: true })}
-                            options={QUESTION_HUB_TOPICS[sectionType].map((topic) => ({ value: topic, label: topic }))}
-                          />
+                        <div className="question-hub-classification-summary">
+                          <span>{values.questionHubDomain}</span>
+                          <span>{skills.find((skill) => skill.value === values.skill)?.label || values.skill}</span>
                         </div>
                       ) : null}
                     </section>
@@ -671,7 +690,7 @@ export default function AdminQuestionWorkspace({
   );
 }
 
-function ReadingFields({ form, values, passages, uploadingPassageFile, onPassageFileUpload, onClearPassageFile }) {
+function ReadingFields({ form, values, passages, uploadingPassageFile, onPassageFileUpload, onClearPassageFile, imageUrl, imageUploading, onImageUpload }) {
   const selectedPassage = passages.find((passage) => passage.id === values.passageId);
   const draftPassage = values.passageAttachmentUrl ? {
     attachmentUrl: values.passageAttachmentUrl,
@@ -753,7 +772,15 @@ function ReadingFields({ form, values, passages, uploadingPassageFile, onPassage
           </>
         )}
       </fieldset>
-      <QuestionPromptFields form={form} />
+      <QuestionPromptFields form={form}>
+        <label className="form-field media-upload-field">
+          <span>Question image (optional)</span>
+          <input key={imageUrl || 'reading-question-image'} type="file" accept="image/png,image/jpeg,image/webp,image/gif" disabled={imageUploading} onChange={onImageUpload} />
+          <small>Use for a chart or illustration that belongs to the question prompt.</small>
+        </label>
+        {imageUrl ? <div className="form-field"><span>Image position</span><PremiumSelect ariaLabel="Question image position" value={form.watch('imagePlacement') || 'ABOVE'} onChange={(value) => form.setValue('imagePlacement', value, { shouldDirty: true })} options={[{ value: 'ABOVE', label: 'Above question text' }, { value: 'BELOW', label: 'Below question text' }]} /></div> : null}
+        {imageUrl ? <div className="builder-image-preview"><QuestionImage src={imageUrl} alt="Question image preview" /><Button type="button" variant="ghost" onClick={() => form.setValue('imageUrl', '', { shouldDirty: true })}>Remove image</Button></div> : null}
+      </QuestionPromptFields>
     </div>
   );
 }
@@ -791,6 +818,18 @@ function MathFields({ form, isTextResponse, imageUrl, imageUploading, onImageUpl
           <span>Uploaded image URL / external URL</span>
           <input placeholder="/uploads/images/graph.png" {...form.register('imageUrl')} />
         </label>
+        <div className="form-field">
+          <span>Image position</span>
+          <PremiumSelect
+            ariaLabel="Question image position"
+            value={form.watch('imagePlacement') || 'ABOVE'}
+            onChange={(value) => form.setValue('imagePlacement', value, { shouldDirty: true })}
+            options={[
+              { value: 'ABOVE', label: 'Above question text' },
+              { value: 'BELOW', label: 'Below question text' }
+            ]}
+          />
+        </div>
         {imageUrl ? (
           <div className="builder-image-preview">
             <QuestionImage src={imageUrl} alt="Uploaded math question preview" />
@@ -852,12 +891,14 @@ function QuestionPromptFields({ form, children, mathEnabled = false }) {
 
 function CommonAnswerFields({
   form,
+  domains,
   skills,
   values,
   isTextResponse,
   usesOptions,
   mathEnabled,
   skillLabel = 'Skill',
+  onDomainChange,
   uploadingImageField,
   onImageUpload
 }) {
@@ -865,12 +906,23 @@ function CommonAnswerFields({
     <fieldset className="editor-panel answer-editor">
       <legend>Scoring & Answer Key</legend>
       <div className="answer-meta-grid">
+        {domains.length ? (
+          <div className="form-field">
+            <span>Question Hub domain</span>
+            <PremiumSelect
+              ariaLabel="Question Hub domain"
+              value={values.questionHubDomain}
+              options={domains}
+              onChange={onDomainChange}
+            />
+          </div>
+        ) : null}
         <div className="form-field">
           <span>{skillLabel}</span>
           <PremiumSelect
             ariaLabel={skillLabel}
             value={values.skill}
-            options={skills.map((skill) => ({ value: skill, label: skill.replaceAll('_', ' ') }))}
+            options={skills}
             onChange={(value) => form.setValue('skill', value, { shouldDirty: true })}
           />
         </div>
@@ -888,6 +940,10 @@ function CommonAnswerFields({
           <input type="number" min="0" {...form.register('order', { required: true, min: 0 })} />
         </label>
       </div>
+      <label className="checkbox-row">
+        <input type="checkbox" {...form.register('isPretest')} />
+        Unscored pretest item
+      </label>
       {usesOptions ? (
         <div className={`question-options-grid ${mathEnabled ? 'with-math-options' : ''}`.trim()}>
             {['A', 'B', 'C', 'D'].map((label) => {
@@ -910,17 +966,16 @@ function CommonAnswerFields({
                       label={`Answer ${label}`}
                       className="option-rich-math-editor"
                       placeholder={`Write answer ${label} with text or formulas.`}
-                      rules={answerChoiceRules(form)}
+                      rules={answerChoiceRules(form, label)}
                       showMathTemplates
                     />
                   ) : (
                     <label className="form-field">
                       <span>Answer text</span>
-                      <input {...form.register(`option${label}`, answerChoiceRules(form))} />
+                      <input {...form.register(`option${label}`, answerChoiceRules(form, label))} />
                     </label>
                   )}
-                  {mathEnabled ? (
-                    <>
+                  <>
                       <label className="form-field media-upload-field option-media-upload">
                         <span>Option {label} image</span>
                         <input
@@ -944,8 +999,7 @@ function CommonAnswerFields({
                           </Button>
                         </div>
                       ) : null}
-                    </>
-                  ) : null}
+                  </>
                 </div>
               );
             })}

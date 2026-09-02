@@ -194,7 +194,7 @@ export default function AppLayout({ title, subtitle, actions, children }) {
             <img src="/monoprep-logo.png" alt="MonoPrep logo" />
             <div className="sidebar-brand-copy">
               <div className="sidebar-brand">MonoPrep</div>
-              <span>SAT Prep Studio</span>
+              <span>SAT</span>
             </div>
             <button
               type="button"

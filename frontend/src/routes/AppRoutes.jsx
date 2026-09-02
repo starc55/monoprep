@@ -15,6 +15,7 @@ const RegisterPage = lazy(() => import("../pages/RegisterPage.jsx"));
 const ForgotPasswordPage = lazy(() => import("../pages/ForgotPasswordPage.jsx"));
 const ResetPasswordPage = lazy(() => import("../pages/ResetPasswordPage.jsx"));
 const AuthCallbackPage = lazy(() => import("../pages/AuthCallbackPage.jsx"));
+const LegalPage = lazy(() => import("../pages/LegalPage.jsx"));
 const DashboardPage = lazy(() => import("../pages/DashboardPage.jsx"));
 const PracticePage = lazy(() => import("../pages/PracticePage.jsx"));
 const DesmosHackPage = lazy(() => import("../pages/DesmosHackPage.jsx"));
@@ -100,6 +101,7 @@ export default function AppRoutes() {
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/auth/callback" element={<AuthCallbackPage />} />
+      <Route path="/legal/:document?" element={<LegalPage />} />
 
       {studentRoutes.map(([path, Page]) => (
         <Route key={path} path={path} element={<StudentPage Page={Page} />} />

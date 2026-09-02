@@ -5,7 +5,6 @@ import {
   BookOpen,
   Calculator,
   Check,
-  ChevronDown,
   ClipboardCheck,
   FileText,
   Filter,
@@ -29,12 +28,17 @@ import FormulaReferenceDialog from '../components/exam/FormulaReferenceDialog.js
 import CalculatorModal from '../components/exam/renderers/CalculatorModal.jsx';
 import PassageAssetViewer from '../components/exam/PassageAssetViewer.jsx';
 import MathJaxContent from '../components/math/MathJaxContent.jsx';
+import { resolveAssetUrl } from '../utils/assets.js';
 import {
   getQuestionBankItems,
   getQuestionHubProgress,
   saveQuestionHubProgress
 } from '../services/questionBankService.js';
 import { useAuthStore } from '../store/authStore.js';
+import {
+  QUESTION_HUB_CATALOG,
+  normalizeQuestionHubItem
+} from '../constants/questionHubCatalog.js';
 
 function resultStorageKey(user) {
   return `monoprep-qhub-results:${user?.id || user?.authUserId || user?.email || 'guest'}`;
@@ -132,13 +136,12 @@ export default function QuestionHubPage() {
   const [stage, setStage] = useState('filters');
   const [sourceMode, setSourceMode] = useState('COLLEGE_BOARD');
   const [query, setQuery] = useState('');
-  const [subject, setSubject] = useState('Math');
+  const [subject, setSubject] = useState('ALL');
   const [selectedDomains, setSelectedDomains] = useState([]);
   const [difficulty, setDifficulty] = useState('ALL');
   const [answeredStatus, setAnsweredStatus] = useState('ALL');
   const [markedFilter, setMarkedFilter] = useState('ALL');
   const [bluebookFilter, setBluebookFilter] = useState('INCLUDED');
-  const [expanded, setExpanded] = useState(() => new Set(['Math', 'Reading & Writing']));
   const [results, setResults] = useState(() => readResults(user));
   const [activeSession, setActiveSession] = useState(null);
   const [selectedAnswer, setSelectedAnswer] = useState('');
@@ -161,7 +164,7 @@ export default function QuestionHubPage() {
       .then(([itemsResult, progressResult]) => {
         if (!active) return;
         if (itemsResult.status === 'fulfilled') {
-          setItems(itemsResult.value);
+          setItems(itemsResult.value.map(normalizeQuestionHubItem));
         } else {
           setLoadError(itemsResult.reason?.response?.data?.message || 'Question Hub could not be loaded.');
           setItems([]);
@@ -228,7 +231,32 @@ export default function QuestionHubPage() {
     });
   }, [answeredStatus, bluebookFilter, difficulty, items, markedFilter, query, results, selectedDomains, sourceMode, subject]);
 
-  const grouped = useMemo(() => groupBy(filteredItems, 'subject'), [filteredItems]);
+  const catalog = useMemo(() => Object.values(QUESTION_HUB_CATALOG)
+    .filter((subjectCatalog) => subject === 'ALL' || subjectCatalog.subject === subject)
+    .map((subjectCatalog) => {
+      const rows = filteredItems.filter((item) => item.subject === subjectCatalog.subject);
+      return {
+        name: subjectCatalog.subject,
+        rows,
+        answered: rows.filter((item) => results[item.id]?.answered).length,
+        domains: subjectCatalog.domains.map((domainCatalog) => {
+          const domainRows = rows.filter((item) => item.domain === domainCatalog.value);
+          return {
+            name: domainCatalog.label,
+            rows: domainRows,
+            answered: domainRows.filter((item) => results[item.id]?.answered).length,
+            skills: domainCatalog.skills.map((skillCatalog) => {
+              const skillRows = domainRows.filter((item) => item.skill === skillCatalog.value);
+              return {
+                name: skillCatalog.label,
+                rows: skillRows,
+                answered: skillRows.filter((item) => results[item.id]?.answered).length
+              };
+            })
+          };
+        })
+      };
+    }), [filteredItems, results, subject]);
   const domainBreakdown = useMemo(() => Object.entries(groupBy(filteredItems, 'domain')).map(([domain, rows]) => ({
     domain,
     count: rows.length,
@@ -251,22 +279,16 @@ export default function QuestionHubPage() {
   const activeChoices = activeItem ? getChoices(activeItem) : [];
   const currentEliminated = activeItem ? eliminated[activeItem.id] || [] : [];
   const questionNumber = activeSession ? activeSession.index + 1 : 0;
+  const activeImageAbove = activeItem?.imagePlacement !== 'BELOW';
 
   function resetFilters() {
     setQuery('');
-    setSubject('Math');
+    setSubject('ALL');
     setSelectedDomains([]);
     setDifficulty('ALL');
     setAnsweredStatus('ALL');
     setMarkedFilter('ALL');
     setBluebookFilter('INCLUDED');
-  }
-
-  function toggleSubject(name) {
-    const next = new Set(expanded);
-    if (next.has(name)) next.delete(name);
-    else next.add(name);
-    setExpanded(next);
   }
 
   function toggleDomain(domain) {
@@ -438,8 +460,8 @@ export default function QuestionHubPage() {
           <div className={(activeItem.passage || activeItem.passageAttachmentUrl) ? 'qhub-exam-body split' : 'qhub-exam-body'}>
             {activeItem.passage || activeItem.passageAttachmentUrl ? (
               <aside className="qhub-passage-panel">
-                {activeItem.passageTitle ? <h2>{activeItem.passageTitle}</h2> : null}
-                <PassageAssetViewer passage={{ attachmentUrl: activeItem.passageAttachmentUrl, attachmentName: activeItem.passageAttachmentName, attachmentMimeType: activeItem.passageAttachmentMimeType }} />
+                {activeItem.passageTitle && !/^untitled passage$/i.test(activeItem.passageTitle) ? <h2>{activeItem.passageTitle}</h2> : null}
+                <PassageAssetViewer seamless passage={{ attachmentUrl: activeItem.passageAttachmentUrl, attachmentName: activeItem.passageAttachmentName, attachmentMimeType: activeItem.passageAttachmentMimeType }} />
                 {activeItem.passage ? <MathJaxContent block>{activeItem.passage}</MathJaxContent> : null}
               </aside>
             ) : null}
@@ -461,8 +483,9 @@ export default function QuestionHubPage() {
               {activeItem.formulaText ? (
                 <MathJaxContent block className="qhub-formula">{activeItem.formulaText}</MathJaxContent>
               ) : null}
-              <h2><MathJaxContent>{activeItem.prompt}</MathJaxContent></h2>
-              {activeItem.imageUrl ? <img className="qhub-question-image" src={activeItem.imageUrl} alt="" /> : null}
+              {activeItem.imageUrl && activeImageAbove ? <img className="qhub-question-image" src={resolveAssetUrl(activeItem.imageUrl)} alt="Question illustration" /> : null}
+              <div className="qhub-question-prompt"><MathJaxContent block>{activeItem.prompt}</MathJaxContent></div>
+              {activeItem.imageUrl && !activeImageAbove ? <img className="qhub-question-image" src={resolveAssetUrl(activeItem.imageUrl)} alt="Question illustration" /> : null}
 
               {activeChoices.length ? (
                 <div className="qhub-exam-choices">
@@ -489,9 +512,9 @@ export default function QuestionHubPage() {
                         }}
                       >
                         <b>{choice.label}</b>
-                        <MathJaxContent>{choice.text}</MathJaxContent>
-                        {choice.imageUrl ? <img src={choice.imageUrl} alt="" /> : null}
-                        {isEliminated ? <X aria-hidden="true" /> : null}
+                        {choice.text ? <MathJaxContent block>{choice.text}</MathJaxContent> : <span />}
+                        {choice.imageUrl ? <img src={resolveAssetUrl(choice.imageUrl)} alt={`Answer ${choice.label}`} /> : null}
+                        {isEliminated && eliminateMode ? <X aria-hidden="true" /> : null}
                       </button>
                     );
                   })}
@@ -764,49 +787,64 @@ export default function QuestionHubPage() {
         </div>
 
         {filteredItems.length ? (
-          <div className="qhub-subject-list">
-            {Object.entries(grouped).map(([name, rows]) => {
-              const Icon = subjectIcon(name);
-              const isExpanded = expanded.has(name);
-              const bySkill = rows.reduce((acc, item) => {
-                const key = `${item.domain}::${item.skill}`;
-                if (!acc[key]) acc[key] = [];
-                acc[key].push(item);
-                return acc;
-              }, {});
+          <div className="qhub-catalog-grid">
+            {catalog.map((subjectGroup) => {
+              const Icon = subjectIcon(subjectGroup.name);
+              const subjectPercent = subjectGroup.rows.length
+                ? Math.round((subjectGroup.answered / subjectGroup.rows.length) * 100)
+                : 0;
 
               return (
-                <article key={name} className="qhub-subject-card">
-                  <div className="qhub-subject-row">
-                    <span className="settings-card-icon blue"><Icon aria-hidden="true" /></span>
-                    <button type="button" onClick={() => setSubject(subject === name ? 'ALL' : name)}>
-                      <strong>{name}</strong>
-                      <small>{rows.length} questions</small>
-                    </button>
-                    <button type="button" className="icon-button" onClick={() => toggleSubject(name)} aria-label={`Toggle ${name}`}>
-                      <ChevronDown aria-hidden="true" />
-                    </button>
-                    <button type="button" className="qhub-play" onClick={() => beginExamSession(rows, `${name} practice`)}>
-                      <Play aria-hidden="true" />
-                    </button>
-                  </div>
-                  {isExpanded ? (
-                    <div className="qhub-skill-list">
-                      {Object.entries(bySkill).map(([key, skillRows]) => {
-                        const [domainName, skillName] = key.split('::');
-                        return (
-                          <button key={key} type="button" onClick={() => beginExamSession(skillRows, skillName)}>
-                            <span>
-                              <strong>{skillName}</strong>
-                              <small>{domainName} - {skillRows.length} questions</small>
-                            </span>
-                            <Play aria-hidden="true" />
-                          </button>
-                        );
-                      })}
+                <section key={subjectGroup.name} className="qhub-catalog-column">
+                  <header className="qhub-catalog-subject">
+                    <span><Icon aria-hidden="true" /></span>
+                    <div>
+                      <h3>{subjectGroup.name}</h3>
+                      <p>{subjectGroup.rows.length.toLocaleString()} questions</p>
                     </div>
-                  ) : null}
-                </article>
+                    <div className="qhub-catalog-subject-progress">
+                      <i><b style={{ width: `${subjectPercent}%` }} /></i>
+                      <small>{subjectGroup.answered}/{subjectGroup.rows.length} attempted</small>
+                    </div>
+                    <button type="button" disabled={!subjectGroup.rows.length} onClick={() => beginExamSession(subjectGroup.rows, `${subjectGroup.name} practice`)} title={`Start ${subjectGroup.name}`}>
+                      <Play aria-hidden="true" />
+                      Start
+                    </button>
+                  </header>
+
+                  <div className="qhub-catalog-domain-list">
+                    {subjectGroup.domains.map((domainGroup) => {
+                      const domainPercent = domainGroup.rows.length
+                        ? Math.round((domainGroup.answered / domainGroup.rows.length) * 100)
+                        : 0;
+                      return (
+                        <article key={domainGroup.name} className="qhub-catalog-domain">
+                          <header>
+                            <button type="button" disabled={!domainGroup.rows.length} onClick={() => beginExamSession(domainGroup.rows, domainGroup.name)}>
+                              <strong>{domainGroup.name}</strong>
+                              <Play aria-hidden="true" />
+                            </button>
+                            <span><i><b style={{ width: `${domainPercent}%` }} /></i>{domainGroup.answered}/{domainGroup.rows.length}</span>
+                          </header>
+                          <div className="qhub-catalog-skills">
+                            {domainGroup.skills.map((skillGroup) => {
+                              const skillPercent = skillGroup.rows.length
+                                ? Math.round((skillGroup.answered / skillGroup.rows.length) * 100)
+                                : 0;
+                              return (
+                                <button key={skillGroup.name} type="button" disabled={!skillGroup.rows.length} onClick={() => beginExamSession(skillGroup.rows, skillGroup.name)}>
+                                  <span>{skillGroup.name}</span>
+                                  <i><b style={{ width: `${skillPercent}%` }} /></i>
+                                  <small>{skillGroup.answered}/{skillGroup.rows.length}</small>
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                </section>
               );
             })}
           </div>

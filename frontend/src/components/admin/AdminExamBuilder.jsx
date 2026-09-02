@@ -37,6 +37,12 @@ const competitionOptions = [
   { value: 'MATH', label: 'Biweekly math competition' },
   { value: 'ENGLISH', label: 'Biweekly English competition' }
 ];
+const adaptiveRoleOptions = [
+  { value: 'STANDARD', label: 'Standard module' },
+  { value: 'MODULE_1', label: 'Adaptive Module 1' },
+  { value: 'MODULE_2_LOWER', label: 'Module 2 - lower route' },
+  { value: 'MODULE_2_HIGHER', label: 'Module 2 - higher route' }
+];
 const WIZARD_STEPS = ['Exam Setup', 'Modules', 'Questions'];
 
 const defaultExamValues = {
@@ -89,7 +95,9 @@ export default function AdminExamBuilder({
       title: SECTION_TEMPLATES.reading_writing.title,
       type: 'reading_writing',
       duration: SECTION_TEMPLATES.reading_writing.duration,
-      order: 1
+      order: 1,
+      adaptiveRole: 'MODULE_1',
+      routingThreshold: 60
     }
   });
 
@@ -146,6 +154,7 @@ export default function AdminExamBuilder({
         source: values.source,
         contentMode: 'REAL_EXAM',
         totalDuration: Number(values.totalDuration),
+        scoringModel: 'SAT_ESTIMATE_V1',
         referenceText: null,
         isPublished: values.isPublished === 'true',
         competitionKind: values.competitionKind,
@@ -159,7 +168,9 @@ export default function AdminExamBuilder({
         title: SECTION_TEMPLATES.reading_writing.title,
         type: 'reading_writing',
         duration: SECTION_TEMPLATES.reading_writing.duration,
-        order: 1
+        order: 1,
+        adaptiveRole: 'MODULE_1',
+        routingThreshold: 60
       });
       setStep(1);
     } catch (error) {
@@ -175,7 +186,9 @@ export default function AdminExamBuilder({
         title: values.title.trim(),
         type: values.type,
         duration: Number(values.duration),
-        order: Number(values.order)
+        order: Number(values.order),
+        adaptiveRole: values.adaptiveRole,
+        routingThreshold: Number(values.routingThreshold ?? 60)
       });
       setCreatedSections((current) => [...current, section]);
       sectionForm.reset({ ...values, title: '', order: Number(values.order) + 1 });
@@ -251,6 +264,10 @@ export default function AdminExamBuilder({
                   ))}
                 </div>
                 <label className="form-field"><span>Section title</span><input aria-invalid={Boolean(sectionForm.formState.errors.title)} {...sectionForm.register('title', { required: true, minLength: 2 })} />{sectionForm.formState.errors.title ? <small className="field-error-message">Enter a module title.</small> : null}</label>
+                <div className="builder-field-row">
+                  <div className="form-field"><span>Adaptive role</span><PremiumSelect ariaLabel="Adaptive module role" value={sectionForm.watch('adaptiveRole')} onChange={(value) => sectionForm.setValue('adaptiveRole', value)} options={adaptiveRoleOptions} /></div>
+                  {sectionForm.watch('adaptiveRole') === 'MODULE_1' ? <label className="form-field"><span>Higher route threshold (%)</span><input type="number" min="0" max="100" {...sectionForm.register('routingThreshold', { min: 0, max: 100 })} /></label> : <div />}
+                </div>
                 <div className="builder-field-row"><label className="form-field"><span>Duration</span><input type="number" min="1" {...sectionForm.register('duration', { required: true, min: 1 })} /></label><label className="form-field"><span>Order</span><input type="number" min="0" {...sectionForm.register('order', { required: true, min: 0 })} /></label></div>
                 {sectionStatus ? <p className={`support-status ${sectionStatus.type}`}>{sectionStatus.message}</p> : null}
                 <div className="exam-wizard-actions"><Button type="button" variant="ghost" onClick={() => setStep(0)}><ChevronLeft aria-hidden="true" /> Exam setup</Button><div><Button type="submit" disabled={sectionStatus?.type === 'pending'}>Add module</Button><Button type="button" disabled={!activeSections.length} onClick={() => setStep(2)}>Continue to questions</Button></div></div>

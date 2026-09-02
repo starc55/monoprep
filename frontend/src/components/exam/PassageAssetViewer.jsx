@@ -19,7 +19,7 @@ function inferMimeType(name = '', url = '') {
   return '';
 }
 
-export default function PassageAssetViewer({ passage, compact = false }) {
+export default function PassageAssetViewer({ passage, compact = false, seamless = false }) {
   if (!passage?.attachmentUrl) return null;
 
   const source = resolveAssetUrl(passage.attachmentUrl);
@@ -33,14 +33,16 @@ export default function PassageAssetViewer({ passage, compact = false }) {
     : source;
 
   return (
-    <section className={`passage-asset-viewer ${compact ? 'compact' : ''}`.trim()} aria-label={`Attached material: ${title}`}>
-      <header>
-        <span><FileText aria-hidden="true" /><b>{title}</b></span>
-        <a href={source} target="_blank" rel="noreferrer" title="Open source file">
-          <ExternalLink aria-hidden="true" />
-          <span>Open</span>
-        </a>
-      </header>
+    <section className={`passage-asset-viewer ${compact ? 'compact' : ''} ${seamless ? 'seamless' : ''}`.trim()} aria-label={`Attached material: ${title}`}>
+      {!seamless ? (
+        <header>
+          <span><FileText aria-hidden="true" /><b>{title}</b></span>
+          <a href={source} target="_blank" rel="noreferrer" title="Open source file">
+            <ExternalLink aria-hidden="true" />
+            <span>Open</span>
+          </a>
+        </header>
+      ) : null}
       {isImage ? (
         <img src={source} alt={title} loading="lazy" />
       ) : isPdf || isWord ? (

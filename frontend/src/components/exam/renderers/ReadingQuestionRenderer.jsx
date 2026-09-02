@@ -1,6 +1,7 @@
 import QuestionOptions from './QuestionOptions.jsx';
 import TextInputQuestion from '../../question/TextInputQuestion.jsx';
 import MathJaxContent from '../../math/MathJaxContent.jsx';
+import QuestionImage from './QuestionImage.jsx';
 
 export default function ReadingQuestionRenderer({
   question,
@@ -11,10 +12,13 @@ export default function ReadingQuestionRenderer({
   eliminateMode
 }) {
   const isTextInput = question.type === 'text_input';
+  const imageAbove = question.imagePlacement !== 'BELOW';
 
   return (
     <div className="question-body reading-question-body">
-      <h3><MathJaxContent>{question.questionText}</MathJaxContent></h3>
+      {imageAbove ? <QuestionImage src={question.imageUrl} alt="Question illustration" /> : null}
+      <div className="question-prompt"><MathJaxContent block>{question.questionText}</MathJaxContent></div>
+      {!imageAbove ? <QuestionImage src={question.imageUrl} alt="Question illustration" /> : null}
       {isTextInput ? (
         <TextInputQuestion value={value} onChange={onChange} />
       ) : (

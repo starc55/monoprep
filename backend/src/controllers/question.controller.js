@@ -32,11 +32,14 @@ async function validateQuestionForSection(questionData, options, existingQuestio
     throw new ApiError(400, 'Math questions must use multiple choice or student-produced response.');
   }
 
-  if (type === 'text_input' && (!Array.isArray(acceptedAnswers) || !acceptedAnswers.length)) {
+  const isStudentProducedResponse = type === 'text_input'
+    || (type === 'math_question' && (!Array.isArray(options) || options.length === 0));
+
+  if (isStudentProducedResponse && (!Array.isArray(acceptedAnswers) || !acceptedAnswers.length)) {
     throw new ApiError(400, 'Text input questions require accepted answers.');
   }
 
-  if (Array.isArray(options) && type !== 'text_input' && options.length < 2) {
+  if (Array.isArray(options) && !isStudentProducedResponse && options.length < 2) {
     throw new ApiError(400, 'Multiple choice questions require answer choices.');
   }
 }

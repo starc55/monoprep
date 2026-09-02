@@ -1,59 +1,18 @@
 import { prisma } from '../config/prisma.js';
 import { ApiError } from '../utils/apiError.js';
+import { normalizeQuestionHubClassification } from '../utils/questionHubCatalog.js';
 
 const QUESTION_COPY_ID_PREFIX = 'question_copy_';
 
-const domainAliases = [
-  {
-    subject: 'Math',
-    domain: 'Algebra',
-    patterns: ['algebra', 'linear', 'equation', 'inequality', 'system']
-  },
-  {
-    subject: 'Math',
-    domain: 'Advanced Math',
-    patterns: ['advanced', 'quadratic', 'polynomial', 'function', 'exponential']
-  },
-  {
-    subject: 'Math',
-    domain: 'Problem-Solving and Data Analysis',
-    patterns: ['data', 'statistic', 'ratio', 'percent', 'probability', 'problem']
-  },
-  {
-    subject: 'Math',
-    domain: 'Geometry and Trigonometry',
-    patterns: ['geometry', 'trigonometry', 'circle', 'triangle', 'angle', 'area', 'volume']
-  },
-  {
-    subject: 'Reading & Writing',
-    domain: 'Information and Ideas',
-    patterns: ['information', 'central', 'idea', 'evidence', 'inference', 'command']
-  },
-  {
-    subject: 'Reading & Writing',
-    domain: 'Craft and Structure',
-    patterns: ['craft', 'structure', 'vocabulary', 'words', 'context', 'purpose']
-  },
-  {
-    subject: 'Reading & Writing',
-    domain: 'Expression of Ideas',
-    patterns: ['expression', 'transition', 'rhetorical', 'organization', 'revision']
-  },
-  {
-    subject: 'Reading & Writing',
-    domain: 'Standard English Conventions',
-    patterns: ['standard', 'english', 'convention', 'grammar', 'punctuation', 'sentence']
-  }
-];
-
 function cleanQuestionBankPayload(payload) {
+  const classification = normalizeQuestionHubClassification(payload.subject, payload.domain, payload.skill);
   return {
     ...(payload.sourceQuestionId
       ? { id: `${QUESTION_COPY_ID_PREFIX}${payload.sourceQuestionId}` }
       : {}),
     subject: payload.subject,
-    domain: payload.domain,
-    skill: payload.skill,
+    domain: classification.domain,
+    skill: classification.skill,
     difficulty: payload.difficulty,
     prompt: payload.prompt,
     choices: payload.choices || null,
@@ -64,27 +23,13 @@ function cleanQuestionBankPayload(payload) {
   };
 }
 
-function titleCaseSkill(value = '') {
-  return String(value)
-    .replaceAll('_', ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
-}
-
 function getSubject(sectionType) {
   return sectionType === 'math' ? 'Math' : 'Reading & Writing';
 }
 
-function getDomain(subject, skill = '') {
-  const normalized = String(skill).toLowerCase();
-  const match = domainAliases.find((item) => item.subject === subject && item.patterns.some((pattern) => normalized.includes(pattern)));
-  return match?.domain || (subject === 'Math' ? 'Algebra' : 'Information and Ideas');
-}
-
 function mapExamQuestionToHubItem(exam, section, question) {
   const subject = getSubject(section.type);
-  const skill = titleCaseSkill(question.skill);
+  const classification = normalizeQuestionHubClassification(subject, '', question.skill);
 
   return {
     id: `exam-question:${question.id}`,
@@ -94,8 +39,8 @@ function mapExamQuestionToHubItem(exam, section, question) {
     sectionId: section.id,
     questionId: question.id,
     subject,
-    domain: getDomain(subject, question.skill),
-    skill,
+    domain: classification.domain,
+    skill: classification.skill,
     difficulty: question.difficulty,
     prompt: question.questionText,
     passage: question.passage?.content || null,
@@ -105,6 +50,7 @@ function mapExamQuestionToHubItem(exam, section, question) {
     passageAttachmentMimeType: question.passage?.attachmentMimeType || null,
     questionType: question.type,
     imageUrl: question.imageUrl,
+    imagePlacement: question.imagePlacement,
     formulaText: question.formulaText,
     tableData: question.tableData,
     calculatorAllowed: question.calculatorAllowed,
@@ -174,7 +120,6 @@ export async function listQuestionBankItems(req, res) {
   const linkedQuestions = adminItems.length
     ? await prisma.question.findMany({
         where: {
-          passageId: { not: null },
           OR: [
             ...(linkedQuestionIds.length ? [{ id: { in: linkedQuestionIds } }] : []),
             ...(legacyPrompts.length ? [{ questionText: { in: [...new Set(legacyPrompts)] } }] : [])
@@ -184,29 +129,35 @@ export async function listQuestionBankItems(req, res) {
         orderBy: { createdAt: 'desc' }
       })
     : [];
-  const passageByPrompt = new Map(
-    linkedQuestions
-      .filter((question) => question.passage)
-      .map((question) => [question.questionText, question.passage])
+  const questionByPrompt = new Map(
+    linkedQuestions.map((question) => [question.questionText, question])
   );
-  const passageByQuestionId = new Map(
-    linkedQuestions
-      .filter((question) => question.passage)
-      .map((question) => [question.id, question.passage])
+  const questionById = new Map(
+    linkedQuestions.map((question) => [question.id, question])
   );
   const enrichedAdminItems = adminItems.map((item) => {
     const sourceQuestionId = item.id.startsWith(QUESTION_COPY_ID_PREFIX)
       ? item.id.slice(QUESTION_COPY_ID_PREFIX.length)
       : null;
-    const passage = (sourceQuestionId && passageByQuestionId.get(sourceQuestionId))
-      || passageByPrompt.get(item.prompt);
+    const sourceQuestion = (sourceQuestionId && questionById.get(sourceQuestionId))
+      || questionByPrompt.get(item.prompt);
+    const passage = sourceQuestion?.passage;
+    const classification = normalizeQuestionHubClassification(item.subject, item.domain, item.skill);
     return {
       ...item,
+      ...classification,
       passage: passage?.content || null,
       passageTitle: passage?.title || null,
       passageAttachmentUrl: passage?.attachmentUrl || null,
       passageAttachmentName: passage?.attachmentName || null,
-      passageAttachmentMimeType: passage?.attachmentMimeType || null
+      passageAttachmentMimeType: passage?.attachmentMimeType || null,
+      questionType: sourceQuestion?.type || null,
+      imageUrl: sourceQuestion?.imageUrl || null,
+      imagePlacement: sourceQuestion?.imagePlacement || 'ABOVE',
+      formulaText: sourceQuestion?.formulaText || null,
+      tableData: sourceQuestion?.tableData || null,
+      calculatorAllowed: sourceQuestion?.calculatorAllowed || false,
+      acceptedAnswers: sourceQuestion?.acceptedAnswers || null
     };
   });
   const examItems = exams.flatMap((exam) => exam.sections.flatMap((section) => (
@@ -287,6 +238,13 @@ export async function updateQuestionBankItem(req, res) {
     if (req.body[key] !== undefined) {
       data[key] = req.body[key] || (['choices', 'explanation'].includes(key) ? null : req.body[key]);
     }
+  }
+
+  if (req.body.subject !== undefined || req.body.domain !== undefined || req.body.skill !== undefined) {
+    const subject = req.body.subject ?? existing.subject;
+    const skill = req.body.skill ?? existing.skill;
+    const domain = req.body.domain ?? existing.domain;
+    Object.assign(data, normalizeQuestionHubClassification(subject, domain, skill));
   }
 
   const item = await prisma.questionBankItem.update({

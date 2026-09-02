@@ -14,6 +14,7 @@ import CalculatorModal from "../components/exam/renderers/CalculatorModal.jsx";
 import QuestionRenderer from "../components/question/QuestionRenderer.jsx";
 import EmptyState from "../components/ui/EmptyState.jsx";
 import {
+  completeAttemptSection,
   getAttempt,
   saveAnswer,
   submitAttempt,
@@ -97,6 +98,13 @@ export default function ExamRoomPage() {
     await Promise.allSettled([...answerSaveQueuesRef.current.values()]);
   }, []);
 
+  const completeCurrentSection = useCallback(async (sectionId) => {
+    await flushAnswerSaves();
+    const refreshedAttempt = await completeAttemptSection(attemptId, sectionId);
+    setAttempt(refreshedAttempt);
+    return refreshedAttempt;
+  }, [attemptId, flushAnswerSaves]);
+
   const {
     sessions,
     initializeSession,
@@ -141,7 +149,20 @@ export default function ExamRoomPage() {
     currentSection,
     session?.currentQuestionIndex || 0
   );
-  const showPassagePanel = currentSection?.type === "reading_writing" || currentSection?.type === "math";
+  const isStudentProducedResponse = currentQuestion?.type === "text_input"
+    || (currentSection?.type === "math" && !currentQuestion?.options?.length);
+  const showPassagePanel = Boolean(currentQuestion?.passage) || isStudentProducedResponse;
+  const currentSectionIndex = session?.currentSectionIndex || 0;
+  const moduleNumber = currentSection
+    ? sections
+      .slice(0, currentSectionIndex + 1)
+      .filter((section) => section.type === currentSection.type).length
+    : 1;
+  const officialSectionTitle = currentSection?.type === "math"
+    ? `Section 2, Module ${moduleNumber}: Math`
+    : currentSection?.type === "reading_writing"
+      ? `Section 1, Module ${moduleNumber}: Reading and Writing`
+      : currentSection?.title;
   useEffect(() => {
     if (!lineReaderActive) return undefined;
     const moveReader = (event) => setLineReaderY(Math.max(96, Math.min(window.innerHeight - 120, event.clientY)));
@@ -204,11 +225,20 @@ export default function ExamRoomPage() {
       },
     });
 
-    const nextIndex = (session?.currentSectionIndex || 0) + 1;
-    if (nextIndex >= sections.length) {
+    let refreshedAttempt;
+    try {
+      refreshedAttempt = await completeCurrentSection(currentSection.id);
+    } catch (error) {
+      setBanner(error.response?.data?.message || "The completed module could not be saved. Please try again.");
+      advancingRef.current = false;
+      return;
+    }
+    const refreshedSections = refreshedAttempt.exam.sections || [];
+    const completedIndex = refreshedSections.findIndex((section) => section.id === currentSection.id);
+    const nextIndex = completedIndex + 1;
+    if (nextIndex >= refreshedSections.length) {
       setSubmitting(true);
       try {
-        await flushAnswerSaves();
         const submitted = await submitAttempt(attemptId);
         setAttempt(submitted);
         clearSession(attemptId);
@@ -222,26 +252,21 @@ export default function ExamRoomPage() {
       return;
     }
 
-    updateSession(attemptId, {
-      currentSectionIndex: nextIndex,
-      currentQuestionIndex: 0,
-      currentSectionStartedAt: Date.now(),
-    });
-    setBanner("Time expired. You have been moved to the next section.");
+    beginSectionTransition(nextIndex, currentSection);
+    setBanner("Time expired. Review this module, then continue when ready.");
     advancingRef.current = false;
   }, [
     attempt,
     attemptId,
     clearSession,
+    completeCurrentSection,
     currentSection,
     navigate,
     savedElapsed,
-    sections.length,
     session?.currentSectionIndex,
     session?.currentSectionStartedAt,
     session?.elapsedSections,
     updateSession,
-    flushAnswerSaves,
   ]);
 
   const remainingSeconds = useCountdown(currentTarget, handleTimeout);
@@ -319,6 +344,11 @@ export default function ExamRoomPage() {
 
   function handleMenuAction(action) {
     setMoreOpen(false);
+
+    if (action === "notes") {
+      setNotesOpen((value) => !value);
+      return;
+    }
 
     if (action === "line-reader") {
       const nextValue = !lineReaderActive;
@@ -515,7 +545,6 @@ export default function ExamRoomPage() {
         )
     );
 
-    const nextIndex = (session?.currentSectionIndex || 0) + 1;
     updateSession(attemptId, {
       elapsedSections: {
         ...(session?.elapsedSections || {}),
@@ -525,10 +554,21 @@ export default function ExamRoomPage() {
 
     setModalOpen(false);
 
-    if (nextIndex >= sections.length) {
-      setSubmitting(true);
+    setSubmitting(true);
+    let refreshedAttempt;
+    try {
+      refreshedAttempt = await completeCurrentSection(currentSection.id);
+    } catch (error) {
+      setBanner(error.response?.data?.message || "The completed module could not be saved. Please try again.");
+      setSubmitting(false);
+      return;
+    }
+    const refreshedSections = refreshedAttempt.exam.sections || [];
+    const completedIndex = refreshedSections.findIndex((section) => section.id === currentSection.id);
+    const nextIndex = completedIndex + 1;
+
+    if (nextIndex >= refreshedSections.length) {
       try {
-        await flushAnswerSaves();
         const submitted = await submitAttempt(attemptId);
         setAttempt(submitted);
         clearSession(attemptId);
@@ -542,6 +582,7 @@ export default function ExamRoomPage() {
       return;
     }
 
+    setSubmitting(false);
     beginSectionTransition(nextIndex, currentSection);
   }
 
@@ -595,6 +636,8 @@ export default function ExamRoomPage() {
           completedSection={completedSectionForTransition}
           answers={answerMap}
           reviewFlags={reviewFlags}
+          showScheduledBreak={completedSectionForTransition?.type === "reading_writing"
+            && sections[transitionSectionIndex]?.type === "math"}
           onReviewQuestion={(questionIndex) => {
             const completedIndex = sections.findIndex((item) => item.id === completedSectionForTransition?.id);
             if (completedIndex < 0) return;
@@ -625,7 +668,7 @@ export default function ExamRoomPage() {
   return (
     <ExamLayout className={lineReaderActive ? "line-reader-active" : ""}>
       <ExamHeader
-        sectionTitle={currentSection.title}
+        sectionTitle={officialSectionTitle}
         remainingSeconds={remainingSeconds}
         timerHidden={timerHidden}
         onToggleTimer={() => setTimerHidden((value) => !value)}
@@ -642,13 +685,13 @@ export default function ExamRoomPage() {
           setNotesOpen(false);
           setActiveDialog("formula");
         }}
-        onOpenNotes={() => setNotesOpen((value) => !value)}
         notesOpen={notesOpen}
         lineReaderActive={lineReaderActive}
         onMenuAction={handleMenuAction}
       />
 
       <div className="exam-divider-line" />
+      <div className="practice-test-banner">THIS IS A PRACTICE TEST</div>
       {banner ? <div className="exam-banner">{banner}</div> : null}
       {lineReaderActive && !modalOpen && !activeDialog ? (
         <div className="line-reader-strip" style={{ top: `${lineReaderY}px` }} aria-hidden="true" />

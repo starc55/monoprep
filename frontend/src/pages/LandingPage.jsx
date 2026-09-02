@@ -330,6 +330,14 @@ export default function LandingPage() {
           <a href="#platform">IELTS</a>
           <a href="#platform">University</a>
         </div>
+        <div className="marketing-footer-links">
+          <strong>Legal</strong>
+          <Link to="/legal/terms">Terms of Use</Link>
+          <Link to="/legal/privacy">Privacy Policy</Link>
+          <Link to="/legal/academic-integrity">Academic Integrity</Link>
+          <Link to="/legal/cookies">Cookie Policy</Link>
+          <a href="/legal/monoprep-platform-policies.pdf" download>Download policies PDF</a>
+        </div>
         <div className="marketing-footer-contact">
           <strong>{t("landing.footer.contact")}</strong>
           <a href="mailto:hello@monoprep.uz">

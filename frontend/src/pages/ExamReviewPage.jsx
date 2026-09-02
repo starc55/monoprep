@@ -6,6 +6,8 @@ import {
   Download,
   Eye,
   FileQuestion,
+  ChevronLeft,
+  ChevronRight,
   Sparkles,
   Star,
   Target,
@@ -18,13 +20,13 @@ import EmptyState from "../components/ui/EmptyState.jsx";
 import Modal from "../components/ui/Modal.jsx";
 import PremiumSelect from "../components/ui/PremiumSelect.jsx";
 import QuestionImage from "../components/exam/renderers/QuestionImage.jsx";
+import PassageAssetViewer from "../components/exam/PassageAssetViewer.jsx";
 import MathJaxContent from "../components/math/MathJaxContent.jsx";
 import { getAttempt } from "../services/attemptService.js";
 import { generateFeedback } from "../services/aiService.js";
 import { getDisplayAnswer } from "../utils/exam.js";
 import { formatSeconds } from "../utils/format.js";
 import { useAuthStore } from "../store/authStore.js";
-import { downloadExamReviewPdf } from "../utils/examReviewPdf.js";
 
 const filters = ["ALL", "CORRECT", "INCORRECT", "MARKED", "UNANSWERED"];
 const viewCountOptions = [
@@ -32,6 +34,23 @@ const viewCountOptions = [
   { value: "30", label: "30" },
   { value: "ALL", label: "All" },
 ];
+
+const REPORT_DOMAINS = [
+  { subject: "Reading & Writing", name: "Information and Ideas", patterns: ["information", "idea", "evidence", "inference", "main"] },
+  { subject: "Reading & Writing", name: "Craft and Structure", patterns: ["craft", "structure", "vocabulary", "context", "purpose"] },
+  { subject: "Reading & Writing", name: "Expression of Ideas", patterns: ["expression", "transition", "rhetoric", "revision"] },
+  { subject: "Reading & Writing", name: "Standard English Conventions", patterns: ["grammar", "punctuation", "convention", "sentence", "boundary"] },
+  { subject: "Math", name: "Algebra", patterns: ["algebra", "linear", "equation", "inequality", "system"] },
+  { subject: "Math", name: "Advanced Math", patterns: ["advanced", "quadratic", "polynomial", "function", "exponential"] },
+  { subject: "Math", name: "Problem-Solving and Data Analysis", patterns: ["data", "statistic", "ratio", "percent", "probability", "problem"] },
+  { subject: "Math", name: "Geometry and Trigonometry", patterns: ["geometry", "trigonometry", "circle", "triangle", "angle", "area", "volume"] },
+];
+
+function getReportDomain(subject, skill = "") {
+  const normalized = String(skill).toLowerCase();
+  return REPORT_DOMAINS.find((domain) => domain.subject === subject && domain.patterns.some((pattern) => normalized.includes(pattern)))?.name
+    || (subject === "Math" ? "Algebra" : "Information and Ideas");
+}
 
 function getCorrectDisplay(question) {
   if (Array.isArray(question?.acceptedAnswers)) {
@@ -71,7 +90,7 @@ function getCorrectValues(question) {
     .map((option) => String(option.label).toUpperCase());
 }
 
-function ReviewAnswerChoices({ question, answer }) {
+function ReviewAnswerChoices({ question, answer, answersVisible = true }) {
   if (!question?.options?.length) return null;
   const selectedValues = normalizeAnswerValues(answer?.answer);
   const correctValues = getCorrectValues(question);
@@ -81,7 +100,7 @@ function ReviewAnswerChoices({ question, answer }) {
       {question.options.map((option) => {
         const label = String(option.label).toUpperCase();
         const selected = selectedValues.includes(label);
-        const correct = correctValues.includes(label) || option.isCorrect;
+        const correct = answersVisible && (correctValues.includes(label) || option.isCorrect);
         return (
           <div
             key={option.id || option.label}
@@ -89,12 +108,12 @@ function ReviewAnswerChoices({ question, answer }) {
           >
             <span className="review-choice-label">{option.label}</span>
             <div className="review-choice-content">
-              <MathJaxContent>{option.text}</MathJaxContent>
+              {option.text ? <MathJaxContent block>{option.text}</MathJaxContent> : null}
               {option.imageUrl ? <QuestionImage src={option.imageUrl} alt={`Option ${option.label} image`} /> : null}
             </div>
             <div className="review-choice-flags">
-              {selected ? <span>Your answer</span> : null}
-              {correct ? <span>Correct</span> : null}
+              {answersVisible && selected ? <span>Your answer</span> : null}
+              {answersVisible && correct ? <span>Correct</span> : null}
             </div>
           </div>
         );
@@ -127,6 +146,7 @@ export default function ExamReviewPage() {
   const [viewCount, setViewCount] = useState("10");
   const [showCorrectAnswers, setShowCorrectAnswers] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
+  const [reviewAnswersVisible, setReviewAnswersVisible] = useState(true);
   const [surveyOpen, setSurveyOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [surveyStep, setSurveyStep] = useState(1);
@@ -166,10 +186,13 @@ export default function ExamReviewPage() {
       .flatMap((section) =>
         section.questions.map((question, index) => {
           const answer = answerMap[question.id];
+          const subject = section.type === "math" ? "Math" : "Reading & Writing";
           return {
             id: question.id,
             number: index + 1,
             section: section.title,
+            subject,
+            domain: getReportDomain(subject, question.skill),
             question,
             answer,
             status: getAnswerStatus(answer),
@@ -205,6 +228,7 @@ export default function ExamReviewPage() {
       ? filtered
       : filtered.slice(0, Number(viewCount));
   }, [filter, rows, viewCount]);
+  const selectedRowIndex = selectedRow ? rows.findIndex((row) => row.id === selectedRow.id) : -1;
 
   if (loading) {
     return (
@@ -241,7 +265,7 @@ export default function ExamReviewPage() {
   const readingSatScore = scoreToSatSection(attempt.readingWritingScore);
   const mathSatScore = scoreToSatSection(attempt.mathScore);
 
-  function handleDownloadReport() {
+  async function handleDownloadReport() {
     const sectionMap = new Map();
     rows.forEach((row) => {
       const current = sectionMap.get(row.section) || { title: row.section, total: 0, correct: 0 };
@@ -250,7 +274,20 @@ export default function ExamReviewPage() {
       sectionMap.set(row.section, current);
     });
 
-    downloadExamReviewPdf({
+    const domains = REPORT_DOMAINS.map((domain) => {
+      const domainRows = rows.filter((row) => row.subject === domain.subject && row.domain === domain.name);
+      const correct = domainRows.filter((row) => row.status === "CORRECT").length;
+      return {
+        subject: domain.subject,
+        name: domain.name,
+        total: domainRows.length,
+        correct,
+        accuracy: domainRows.length ? Math.round((correct / domainRows.length) * 100) : 0,
+      };
+    });
+
+    const { downloadExamReviewPdf } = await import("../utils/examReviewPdf.js");
+    await downloadExamReviewPdf({
       studentName: user?.fullName || user?.username || user?.email || "MonoPrep student",
       examTitle: attempt.exam.title,
       submittedDate: new Date(attempt.submittedAt || attempt.startedAt).toLocaleDateString("en-US", {
@@ -261,14 +298,16 @@ export default function ExamReviewPage() {
       totalScore: totalSatScore,
       readingScore: readingSatScore,
       mathScore: mathSatScore,
-      readingProgress: attempt.readingWritingScore || 0,
-      mathProgress: attempt.mathScore || 0,
+      readingProgress: Math.max(0, Math.min(100, Math.round((readingSatScore - 200) / 6))),
+      mathProgress: Math.max(0, Math.min(100, Math.round((mathSatScore - 200) / 6))),
       timeSpent: formatSeconds(attempt.timeSpent || 0),
       totalQuestions: overview.total,
       correct: overview.correct,
       incorrect: overview.incorrect,
       unanswered: overview.unanswered,
       accuracy: overview.accuracy,
+      domains,
+      platformUrl: window.location.origin,
       feedback: feedback?.overallFeedback || "",
       sections: Array.from(sectionMap.values()).map((section) => ({
         ...section,
@@ -320,7 +359,7 @@ export default function ExamReviewPage() {
       <section id="score-summary" className="review-results-hero">
         <img src="/monoprep-logo.png" alt="" className="review-hero-watermark" aria-hidden="true" />
         <div className="review-hero-copy">
-          <span>Completed SAT report</span>
+          <span>{attempt.scoreIsEstimated ? "Estimated SAT score" : "Completed score report"}</span>
           <h2>{attempt.exam.title}</h2>
           <p><Clock3 aria-hidden="true" /> {formatSeconds(attempt.timeSpent || 0)} total testing time</p>
         </div>
@@ -333,12 +372,12 @@ export default function ExamReviewPage() {
           <article>
             <span>Reading &amp; Writing</span>
             <strong>{readingSatScore}<small>/800</small></strong>
-            <i><b style={{ width: `${Math.min(100, attempt.readingWritingScore || 0)}%` }} /></i>
+            <i><b style={{ width: `${Math.max(0, Math.min(100, (readingSatScore - 200) / 6))}%` }} /></i>
           </article>
           <article>
             <span>Math</span>
             <strong>{mathSatScore}<small>/800</small></strong>
-            <i><b style={{ width: `${Math.min(100, attempt.mathScore || 0)}%` }} /></i>
+            <i><b style={{ width: `${Math.max(0, Math.min(100, (mathSatScore - 200) / 6))}%` }} /></i>
           </article>
         </div>
       </section>
@@ -482,6 +521,18 @@ export default function ExamReviewPage() {
       >
         {selectedRow ? (
           <div className="review-detail">
+            <div className="review-modal-toolbar">
+              <button type="button" onClick={() => setReviewAnswersVisible((value) => !value)}>
+                <Eye aria-hidden="true" /> {reviewAnswersVisible ? "Hide answers" : "Show answers"}
+              </button>
+              <button type="button" disabled={selectedRowIndex <= 0} onClick={() => setSelectedRow(rows[selectedRowIndex - 1])}>
+                <ChevronLeft aria-hidden="true" /> Previous
+              </button>
+              <span>{selectedRowIndex + 1} of {rows.length}</span>
+              <button type="button" disabled={selectedRowIndex >= rows.length - 1} onClick={() => setSelectedRow(rows[selectedRowIndex + 1])}>
+                Next <ChevronRight aria-hidden="true" />
+              </button>
+            </div>
             <div className="review-detail-tags">
               <span className="pill blue">{selectedRow.section}</span>
               <span className="pill">{selectedRow.question.skill}</span>
@@ -493,6 +544,16 @@ export default function ExamReviewPage() {
                 {statusLabel(selectedRow.status)}
               </span>
             </div>
+            {selectedRow.question.passage ? (
+              <section className="review-passage-material">
+                {selectedRow.question.passage.title && !/^untitled passage$/i.test(selectedRow.question.passage.title) ? <h3>{selectedRow.question.passage.title}</h3> : null}
+                <PassageAssetViewer passage={selectedRow.question.passage} seamless />
+                {selectedRow.question.passage.content ? <MathJaxContent block>{selectedRow.question.passage.content}</MathJaxContent> : null}
+              </section>
+            ) : null}
+            {selectedRow.question.imageUrl && selectedRow.question.imagePlacement !== "BELOW" ? (
+              <QuestionImage src={selectedRow.question.imageUrl} alt="Question illustration" />
+            ) : null}
             <MathJaxContent block className="review-question-text">
               {selectedRow.question.questionText}
             </MathJaxContent>
@@ -501,11 +562,11 @@ export default function ExamReviewPage() {
                 {selectedRow.question.formulaText}
               </MathJaxContent>
             ) : null}
-            {selectedRow.question.imageUrl ? (
+            {selectedRow.question.imageUrl && selectedRow.question.imagePlacement === "BELOW" ? (
               <QuestionImage src={selectedRow.question.imageUrl} alt="Question illustration" />
             ) : null}
-            <ReviewAnswerChoices question={selectedRow.question} answer={selectedRow.answer} />
-            <div className="review-answer-grid">
+            <ReviewAnswerChoices question={selectedRow.question} answer={selectedRow.answer} answersVisible={reviewAnswersVisible} />
+            {reviewAnswersVisible ? <div className="review-answer-grid">
               <div>
                 <span>Your answer</span>
                 <strong>{getDisplayAnswer(selectedRow.answer?.answer)}</strong>
@@ -514,8 +575,8 @@ export default function ExamReviewPage() {
                 <span>Correct answer</span>
                 <strong>{getCorrectDisplay(selectedRow.question)}</strong>
               </div>
-            </div>
-            <div className="review-explanation">
+            </div> : null}
+            {reviewAnswersVisible ? <div className="review-explanation">
               <h4>Solution &amp; explanation</h4>
               <MathJaxContent block>
                 {selectedRow.question.explanation ||
@@ -524,8 +585,8 @@ export default function ExamReviewPage() {
               {selectedRow.question.explanationImageUrl ? (
                 <QuestionImage src={selectedRow.question.explanationImageUrl} alt="Worked solution" />
               ) : null}
-            </div>
-            {aiQuestionFeedback ? (
+            </div> : null}
+            {reviewAnswersVisible && aiQuestionFeedback ? (
               <div className="review-explanation ai">
                 <h4>
                   <Sparkles aria-hidden="true" /> AI explanation

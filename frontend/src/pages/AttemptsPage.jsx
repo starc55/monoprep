@@ -15,6 +15,12 @@ import EmptyState from "../components/ui/EmptyState.jsx";
 import { getMyAttempts } from "../services/attemptService.js";
 import { formatDate } from "../utils/format.js";
 
+function toSatScore(score, section = false) {
+  if (score === null || score === undefined) return null;
+  if (score > 100) return Math.round(score);
+  return Math.round((section ? 200 : 400) + (score / 100) * (section ? 600 : 1200));
+}
+
 export default function AttemptsPage() {
   const [loading, setLoading] = useState(true);
   const [attempts, setAttempts] = useState([]);
@@ -34,7 +40,7 @@ export default function AttemptsPage() {
       completed: completed.length,
       inProgress: attempts.length - completed.length,
       bestScore: completed.length
-        ? Math.max(...completed.map((attempt) => attempt.totalScore || 0))
+        ? Math.max(...completed.map((attempt) => toSatScore(attempt.totalScore) || 400))
         : 0,
     };
   }, [attempts]);
@@ -77,7 +83,7 @@ export default function AttemptsPage() {
           icon={BarChart3}
           tone="violet"
           label="Best Score"
-          value={`${overview.bestScore}%`}
+          value={overview.bestScore || "--"}
         />
       </div>
 
@@ -113,17 +119,17 @@ export default function AttemptsPage() {
                       <td>
                         {attempt.totalScore == null
                           ? "--"
-                          : `${attempt.totalScore}%`}
+                          : toSatScore(attempt.totalScore)}
                       </td>
                       <td>
                         {attempt.readingWritingScore == null
                           ? "--"
-                          : `${attempt.readingWritingScore}%`}
+                          : toSatScore(attempt.readingWritingScore, true)}
                       </td>
                       <td>
                         {attempt.mathScore == null
                           ? "--"
-                          : `${attempt.mathScore}%`}
+                          : toSatScore(attempt.mathScore, true)}
                       </td>
                       <td>{formatDate(attempt.startedAt)}</td>
                       <td>

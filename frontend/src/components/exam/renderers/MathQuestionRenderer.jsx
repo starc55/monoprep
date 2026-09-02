@@ -1,8 +1,6 @@
-import { useState } from 'react';
 import TextInputQuestion from '../../question/TextInputQuestion.jsx';
 import QuestionOptions from './QuestionOptions.jsx';
 import QuestionImage from './QuestionImage.jsx';
-import CalculatorModal from './CalculatorModal.jsx';
 import MathJaxContent from '../../math/MathJaxContent.jsx';
 
 function DataTable({ data }) {
@@ -36,20 +34,14 @@ export default function MathQuestionRenderer({
   onToggleEliminated,
   eliminateMode
 }) {
-  const [calculatorOpen, setCalculatorOpen] = useState(false);
   const isTextInput = question.type === 'text_input' || !question.options?.length;
+  const imageAbove = question.imagePlacement !== 'BELOW';
 
   return (
     <div className="question-body math-question-body">
-      <div className="math-tool-row">
-        {question.calculatorAllowed ? (
-          <button type="button" className="math-tool-button" onClick={() => setCalculatorOpen(true)}>
-            Calculator
-          </button>
-        ) : null}
-      </div>
-      <h3><MathJaxContent>{question.questionText}</MathJaxContent></h3>
-      <QuestionImage src={question.imageUrl} alt="Graph or reference image for this math question" />
+      {imageAbove ? <QuestionImage src={question.imageUrl} alt="Graph or reference image for this math question" /> : null}
+      <div className="question-prompt"><MathJaxContent block>{question.questionText}</MathJaxContent></div>
+      {!imageAbove ? <QuestionImage src={question.imageUrl} alt="Graph or reference image for this math question" /> : null}
       <DataTable data={question.tableData} />
       {isTextInput ? (
         <TextInputQuestion value={value} onChange={onChange} placeholder="Enter your numeric answer" />
@@ -63,7 +55,6 @@ export default function MathQuestionRenderer({
           eliminateMode={eliminateMode}
         />
       )}
-      <CalculatorModal open={calculatorOpen} onClose={() => setCalculatorOpen(false)} />
     </div>
   );
 }

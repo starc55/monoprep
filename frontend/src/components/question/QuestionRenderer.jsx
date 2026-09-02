@@ -1,3 +1,5 @@
+import { useState } from "react";
+import { Flag } from "lucide-react";
 import ListeningQuestionRenderer from "../exam/renderers/ListeningQuestionRenderer.jsx";
 import MathQuestionRenderer from "../exam/renderers/MathQuestionRenderer.jsx";
 import ReadingQuestionRenderer from "../exam/renderers/ReadingQuestionRenderer.jsx";
@@ -60,7 +62,7 @@ export default function QuestionRenderer({
             className={`mark-review ${markedForReview ? "active" : ""}`.trim()}
             onClick={onMarkForReview}
           >
-            <span aria-hidden="true">Flag</span>
+            <Flag size={18} strokeWidth={1.8} aria-hidden="true" />
             {markedForReview ? "Marked for Review" : "Mark for Review"}
           </button>
         )}
@@ -75,4 +77,3 @@ export default function QuestionRenderer({
     </div>
   );
 }
-import { useState } from "react";

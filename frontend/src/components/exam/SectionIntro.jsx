@@ -14,7 +14,8 @@ export default function SectionIntro({
   reviewFlags = {},
   onContinue,
   onReviewQuestion,
-  isFinal = false
+  isFinal = false,
+  showScheduledBreak = false
 }) {
   const [mode, setMode] = useState(completedSection ? 'summary' : 'intro');
   const [secondsLeft, setSecondsLeft] = useState(600);
@@ -42,53 +43,26 @@ export default function SectionIntro({
   }, [mode]);
 
   useEffect(() => () => {
-    if (audioRef.current) {
-      audioRef.current.close().catch(() => null);
-    }
+    audioRef.current?.pause();
   }, []);
 
-  function toggleMusic() {
-    if (audioRef.current) {
-      audioRef.current.close().catch(() => null);
-      audioRef.current = null;
+  async function toggleMusic() {
+    const player = audioRef.current;
+    if (!player) return;
+
+    if (!player.paused) {
+      player.pause();
       setMusicOn(false);
       return;
     }
 
-    const AudioContext = window.AudioContext || window.webkitAudioContext;
-    if (!AudioContext) return;
-    const context = new AudioContext();
-    const master = context.createGain();
-    const rainFilter = context.createBiquadFilter();
-    const rainGain = context.createGain();
-    const swell = context.createOscillator();
-    const swellDepth = context.createGain();
-    const noiseBuffer = context.createBuffer(1, context.sampleRate * 3, context.sampleRate);
-    const noise = noiseBuffer.getChannelData(0);
-    for (let index = 0; index < noise.length; index += 1) {
-      noise[index] = (Math.random() * 2 - 1) * (0.68 + Math.random() * 0.32);
+    try {
+      player.volume = 0.48;
+      await player.play();
+      setMusicOn(true);
+    } catch (_error) {
+      setMusicOn(false);
     }
-    const rain = context.createBufferSource();
-    rain.buffer = noiseBuffer;
-    rain.loop = true;
-    rainFilter.type = 'lowpass';
-    rainFilter.frequency.value = 1450;
-    rainFilter.Q.value = 0.4;
-    rainGain.gain.value = 0.055;
-    master.gain.value = 0.72;
-    swell.type = 'sine';
-    swell.frequency.value = 0.09;
-    swellDepth.gain.value = 0.018;
-    swell.connect(swellDepth);
-    swellDepth.connect(rainGain.gain);
-    rain.connect(rainFilter);
-    rainFilter.connect(rainGain);
-    rainGain.connect(master);
-    master.connect(context.destination);
-    rain.start();
-    swell.start();
-    audioRef.current = context;
-    setMusicOn(true);
   }
 
   if (mode === 'break') {
@@ -96,13 +70,21 @@ export default function SectionIntro({
       <div className="scheduled-break-screen">
         <div className="break-stars" aria-hidden="true" />
         <section className="break-panel">
+          <audio
+            ref={audioRef}
+            src={`${import.meta.env.BASE_URL}audio/milli-lofi-break.mp3`}
+            preload="metadata"
+            loop
+            onPause={() => setMusicOn(false)}
+            onPlay={() => setMusicOn(true)}
+          />
           <p>Take a moment to relax</p>
           <strong>{formatSeconds(secondsLeft)}</strong>
           <Button onClick={onContinue}>Resume Exam</Button>
           <button type="button" className="relaxing-music-button" onClick={toggleMusic}>
             {musicOn ? <VolumeX aria-hidden="true" /> : <Play aria-hidden="true" />}
-            <span>Nature Soundscape</span>
-            <small>{musicOn ? 'Soft rain is playing' : 'Rain and distant wind'}</small>
+            <span>Milli Lofi</span>
+            <small>{musicOn ? 'Study mix is playing' : '10-minute break mix'}</small>
           </button>
           <span>You can resume the test at any point. Use this time to rest your eyes and mind.</span>
         </section>
@@ -155,7 +137,9 @@ export default function SectionIntro({
               <span><i className="flagged" /> Flagged ({stats.flagged})</span>
               <span><i /> Unanswered ({stats.unanswered})</span>
             </div>
-            <Button onClick={() => setMode('break')}>Continue to next section</Button>
+            <Button onClick={() => showScheduledBreak ? setMode('break') : onContinue()}>
+              {showScheduledBreak ? 'Continue to scheduled break' : 'Continue to next module'}
+            </Button>
           </section>
         </main>
       </div>

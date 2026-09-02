@@ -19,6 +19,11 @@ import QuestionWorkspaceErrorBoundary from "../components/admin/QuestionWorkspac
 import QuestionImage from "../components/exam/renderers/QuestionImage.jsx";
 import PassageAssetViewer from "../components/exam/PassageAssetViewer.jsx";
 import { getApiErrorMessage } from "../utils/apiError.js";
+import {
+  getQuestionHubClassification,
+  getQuestionHubDomains,
+  getQuestionHubSkills,
+} from "../constants/questionHubCatalog.js";
 import "../styles/pages/teacher-exams.css";
 import {
   createExam, createPassage, createQuestion, createSection, deleteExam, deleteQuestion,
@@ -62,11 +67,12 @@ function optionValues(question) {
   };
 }
 
-function editAnswerChoiceRules(form) {
+function editAnswerChoiceRules(form, label) {
   return {
     validate: (value) => !form.getValues("hasAnswerChoices")
       || String(value || "").trim().length > 0
-      || "Answer choice is required.",
+      || Boolean(form.getValues(`option${label}ImageUrl`))
+      || "Add answer text or an image.",
   };
 }
 
@@ -103,7 +109,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
   const [editingImageField, setEditingImageField] = useState("");
   const [editingPassageFile, setEditingPassageFile] = useState(false);
 
-  const sectionForm = useForm({ defaultValues: { title: "", type: "reading_writing", duration: 30, order: 1 } });
+  const sectionForm = useForm({ defaultValues: { title: "", type: "reading_writing", duration: 30, order: 1, adaptiveRole: "STANDARD", routingThreshold: 60 } });
   const examForm = useForm({
     defaultValues: {
       title: "", description: "", type: "FULL_LENGTH", accessType: "FREE", source: "MONOPREP",
@@ -113,8 +119,8 @@ export default function AdminExamsPage({ mode = "admin" }) {
   });
   const questionForm = useForm({
     defaultValues: {
-      questionText: "", formulaText: "", skill: "", difficulty: "MEDIUM", explanation: "", explanationImageUrl: "", order: 1,
-      imageUrl: "", acceptedAnswers: "", hasAnswerChoices: true,
+      questionText: "", formulaText: "", questionHubDomain: "", skill: "", difficulty: "MEDIUM", isPretest: false, explanation: "", explanationImageUrl: "", order: 1,
+      imageUrl: "", imagePlacement: "ABOVE", acceptedAnswers: "", hasAnswerChoices: true,
       passageTitle: "", passageCategory: "reading", passageContent: "", passageAttachmentUrl: "",
       passageAttachmentName: "", passageAttachmentMimeType: "",
       correctOption: "A", optionA: "", optionAImageUrl: "", optionB: "", optionBImageUrl: "",
@@ -122,6 +128,11 @@ export default function AdminExamsPage({ mode = "admin" }) {
     },
   });
   const questionHasAnswerChoices = questionForm.watch("hasAnswerChoices");
+  const editingQuestionDomains = getQuestionHubDomains(editingQuestion?.sectionType);
+  const editingQuestionSkills = getQuestionHubSkills(
+    editingQuestion?.sectionType,
+    questionForm.watch("questionHubDomain")
+  );
 
   useEffect(() => {
     if (questionHasAnswerChoices === false) {
@@ -200,20 +211,24 @@ export default function AdminExamsPage({ mode = "admin" }) {
   function openSectionEditor(section) {
     setEditingSection(section);
     setActionStatus(null);
-    sectionForm.reset({ title: section.title, type: section.type, duration: section.duration, order: section.order });
+    sectionForm.reset({ title: section.title, type: section.type, duration: section.duration, order: section.order, adaptiveRole: section.adaptiveRole || "STANDARD", routingThreshold: section.routingThreshold ?? 60 });
   }
 
   function openQuestionEditor(question, sectionType) {
+    const classification = getQuestionHubClassification(sectionType, "", question.skill);
     setEditingQuestion({ ...question, sectionType });
     setActionStatus(null);
     questionForm.reset({
       questionText: question.questionText,
       formulaText: question.formulaText || "",
-      skill: question.skill,
+      questionHubDomain: classification.domain,
+      skill: classification.skill,
       difficulty: question.difficulty,
+      isPretest: Boolean(question.isPretest),
       explanation: question.explanation,
       explanationImageUrl: question.explanationImageUrl || "",
       imageUrl: question.imageUrl || "",
+      imagePlacement: question.imagePlacement || "ABOVE",
       acceptedAnswers: Array.isArray(question.acceptedAnswers) ? question.acceptedAnswers.join(", ") : "",
       hasAnswerChoices: question.type !== "text_input",
       passageTitle: question.passage?.title || "",
@@ -268,7 +283,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
   async function handleSectionUpdate(values) {
     setActionStatus({ type: "pending", message: "Saving module..." });
     try {
-      await updateSection(editingSection.id, { title: values.title.trim(), type: values.type, duration: Number(values.duration), order: Number(values.order) });
+      await updateSection(editingSection.id, { title: values.title.trim(), type: values.type, duration: Number(values.duration), order: Number(values.order), adaptiveRole: values.adaptiveRole, routingThreshold: Number(values.routingThreshold ?? 60) });
       await load();
       setEditingSection(null);
     } catch (error) {
@@ -281,12 +296,14 @@ export default function AdminExamsPage({ mode = "admin" }) {
     try {
       const payload = {
         questionText: values.questionText.trim(),
-        formulaText: values.formulaText.trim() || null,
+        formulaText: editingQuestion.sectionType === "math" ? values.formulaText.trim() || null : null,
         skill: values.skill.trim(),
         difficulty: values.difficulty,
+        isPretest: Boolean(values.isPretest),
         explanation: values.explanation.trim(),
         explanationImageUrl: values.explanationImageUrl || null,
         imageUrl: values.imageUrl || null,
+        imagePlacement: values.imagePlacement || "ABOVE",
         order: Number(values.order),
       };
 
@@ -432,7 +449,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
                               <div className="exam-inline-editor">
                                 {(detail?.sections || []).map((section) => (
                                   <section key={section.id} className="exam-inline-section">
-                                    <header><div><strong>{section.title}</strong><span>{section.type.replaceAll("_", " ")} · {section.duration} min · {section.questions.length} questions</span></div><RowActionMenu label={`Actions for ${section.title}`} items={[
+                                    <header><div><strong>{section.title}</strong><span>{section.type.replaceAll("_", " ")} · {(section.adaptiveRole || "STANDARD").replaceAll("_", " ")} · {section.duration} min · {section.questions.length} questions</span></div><RowActionMenu label={`Actions for ${section.title}`} items={[
                                       { label: "Add question", icon: Plus, onSelect: () => setAuthoringSection({ ...section, examId: exam.id, examTitle: exam.title, questionsCount: section.questions.length, contentMode: exam.contentMode }) },
                                       { label: "Edit module", icon: Pencil, onSelect: () => openSectionEditor(section) },
                                       { label: "Delete module", icon: Trash2, tone: "danger", onSelect: () => setConfirmAction({ title: "Delete module?", message: `"${section.title}" and all questions inside it will be removed.`, confirmLabel: "Delete module", run: () => deleteSection(section.id) }) },
@@ -516,7 +533,14 @@ export default function AdminExamsPage({ mode = "admin" }) {
       </Modal>
 
       <Modal open={Boolean(editingSection)} title="Edit module" onClose={() => setEditingSection(null)} actions={<><Button variant="ghost" onClick={() => setEditingSection(null)}>Cancel</Button><Button type="submit" form="section-edit-form" disabled={actionStatus?.type === "pending"}>Save module</Button></>}>
-        <form id="section-edit-form" className="stack-form" onSubmit={sectionForm.handleSubmit(handleSectionUpdate)}><label className="form-field"><span>Title</span><input {...sectionForm.register("title", { required: true, minLength: 2 })} /></label><div className="form-field"><span>Type</span><PremiumSelect ariaLabel="Module type" value={sectionForm.watch("type")} onChange={(value) => sectionForm.setValue("type", value)} options={[{ value: "reading_writing", label: "Reading & Writing" }, { value: "math", label: "Math" }, { value: "custom_practice", label: "Custom Practice" }]} /></div><div className="crm-form-row"><label className="form-field"><span>Duration</span><input type="number" min="1" {...sectionForm.register("duration", { required: true, min: 1 })} /></label><label className="form-field"><span>Order</span><input type="number" min="0" {...sectionForm.register("order", { required: true, min: 0 })} /></label></div>{actionStatus?.type === "error" ? <p className="support-status error">{actionStatus.message}</p> : null}</form>
+        <form id="section-edit-form" className="stack-form" onSubmit={sectionForm.handleSubmit(handleSectionUpdate)}>
+          <label className="form-field"><span>Title</span><input {...sectionForm.register("title", { required: true, minLength: 2 })} /></label>
+          <div className="form-field"><span>Type</span><PremiumSelect ariaLabel="Module type" value={sectionForm.watch("type")} onChange={(value) => sectionForm.setValue("type", value)} options={[{ value: "reading_writing", label: "Reading & Writing" }, { value: "math", label: "Math" }, { value: "custom_practice", label: "Custom Practice" }]} /></div>
+          <div className="form-field"><span>Adaptive role</span><PremiumSelect ariaLabel="Adaptive role" value={sectionForm.watch("adaptiveRole")} onChange={(value) => sectionForm.setValue("adaptiveRole", value)} options={[{ value: "STANDARD", label: "Standard module" }, { value: "MODULE_1", label: "Adaptive Module 1" }, { value: "MODULE_2_LOWER", label: "Module 2 - lower route" }, { value: "MODULE_2_HIGHER", label: "Module 2 - higher route" }]} /></div>
+          <div className="crm-form-row"><label className="form-field"><span>Duration</span><input type="number" min="1" {...sectionForm.register("duration", { required: true, min: 1 })} /></label><label className="form-field"><span>Order</span><input type="number" min="0" {...sectionForm.register("order", { required: true, min: 0 })} /></label></div>
+          {sectionForm.watch("adaptiveRole") === "MODULE_1" ? <label className="form-field"><span>Higher route threshold (%)</span><input type="number" min="0" max="100" {...sectionForm.register("routingThreshold", { min: 0, max: 100 })} /></label> : null}
+          {actionStatus?.type === "error" ? <p className="support-status error">{actionStatus.message}</p> : null}
+        </form>
       </Modal>
 
       <Modal open={Boolean(editingQuestion)} title="Edit question" className="modal-card-wide" onClose={() => setEditingQuestion(null)} actions={<><Button variant="ghost" onClick={() => setEditingQuestion(null)}>Cancel</Button><Button type="submit" form="question-edit-form" disabled={actionStatus?.type === "pending" || Boolean(editingImageField) || editingPassageFile}>Save question</Button></>}>
@@ -541,6 +565,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
             </fieldset>
           ) : null}
           <QuestionEditorImageField form={questionForm} fieldName="imageUrl" label="Question image" alt="Question image preview" uploadingImageField={editingImageField} onImageUpload={handleQuestionEditorImageUpload} />
+          {questionForm.watch("imageUrl") ? <div className="form-field"><span>Question image position</span><PremiumSelect ariaLabel="Question image position" value={questionForm.watch("imagePlacement") || "ABOVE"} onChange={(value) => questionForm.setValue("imagePlacement", value, { shouldDirty: true })} options={[{ value: "ABOVE", label: "Above question text" }, { value: "BELOW", label: "Below question text" }]} /></div> : null}
           <RichMathEditor
             form={questionForm}
             name="questionText"
@@ -562,7 +587,37 @@ export default function AdminExamsPage({ mode = "admin" }) {
               mathEnabled={editingQuestion?.sectionType === "math"}
             />
           ) : <label className="form-field"><span>Accepted answers (comma separated)</span><input placeholder="3, 3.0, 6/2" {...questionForm.register("acceptedAnswers", editAcceptedAnswerRules(questionForm))} /></label>}
-          <div className="crm-form-row crm-form-row-three"><label className="form-field"><span>Skill</span><input {...questionForm.register("skill", { required: true, minLength: 2 })} /></label><div className="form-field"><span>Difficulty</span><PremiumSelect ariaLabel="Difficulty" value={questionForm.watch("difficulty")} onChange={(value) => questionForm.setValue("difficulty", value)} options={[{ value: "EASY", label: "Easy" }, { value: "MEDIUM", label: "Medium" }, { value: "HARD", label: "Hard" }]} /></div><label className="form-field"><span>Order</span><input type="number" min="0" {...questionForm.register("order", { required: true, min: 0 })} /></label></div>
+          {editingQuestionDomains.length ? (
+            <div className="crm-form-row">
+              <div className="form-field">
+                <span>Question Hub domain</span>
+                <PremiumSelect
+                  ariaLabel="Question Hub domain"
+                  value={questionForm.watch("questionHubDomain")}
+                  options={editingQuestionDomains}
+                  onChange={(domain) => {
+                    questionForm.setValue("questionHubDomain", domain, { shouldDirty: true });
+                    questionForm.setValue(
+                      "skill",
+                      getQuestionHubSkills(editingQuestion?.sectionType, domain)[0]?.value || "",
+                      { shouldDirty: true }
+                    );
+                  }}
+                />
+              </div>
+              <div className="form-field">
+                <span>Skill</span>
+                <PremiumSelect
+                  ariaLabel="Question Hub skill"
+                  value={questionForm.watch("skill")}
+                  options={editingQuestionSkills}
+                  onChange={(value) => questionForm.setValue("skill", value, { shouldDirty: true })}
+                />
+              </div>
+            </div>
+          ) : <label className="form-field"><span>Skill</span><input {...questionForm.register("skill", { required: true, minLength: 2 })} /></label>}
+          <div className="crm-form-row"><div className="form-field"><span>Difficulty</span><PremiumSelect ariaLabel="Difficulty" value={questionForm.watch("difficulty")} onChange={(value) => questionForm.setValue("difficulty", value)} options={[{ value: "EASY", label: "Easy" }, { value: "MEDIUM", label: "Medium" }, { value: "HARD", label: "Hard" }]} /></div><label className="form-field"><span>Order</span><input type="number" min="0" {...questionForm.register("order", { required: true, min: 0 })} /></label></div>
+          <label className="checkbox-row"><input type="checkbox" {...questionForm.register("isPretest")} /> Unscored pretest item</label>
           <RichMathEditor
             form={questionForm}
             name="explanation"
@@ -596,6 +651,7 @@ function AdminQuestionPreview({ question, compact = false }) {
   const acceptedAnswers = Array.isArray(question.acceptedAnswers)
     ? question.acceptedAnswers
     : question.correctAnswer?.acceptedAnswers || [];
+  const imageAbove = question.imagePlacement !== "BELOW";
 
   return (
     <article className={`question-preview admin-question-preview ${compact ? "compact" : ""}`.trim()}>
@@ -607,9 +663,10 @@ function AdminQuestionPreview({ question, compact = false }) {
           {question.passage.content ? <MathJaxContent block>{question.passage.content}</MathJaxContent> : null}
         </section>
       ) : null}
-      {question.imageUrl ? <QuestionImage src={question.imageUrl} alt="Question material" /> : null}
+      {question.imageUrl && imageAbove ? <QuestionImage src={question.imageUrl} alt="Question material" /> : null}
       {question.formulaText ? <MathJaxContent block className="preview-formula">{question.formulaText}</MathJaxContent> : null}
       <MathJaxContent block className="preview-question">{question.questionText}</MathJaxContent>
+      {question.imageUrl && !imageAbove ? <QuestionImage src={question.imageUrl} alt="Question material" /> : null}
       {(question.options || []).length ? (
         <div className="preview-options">
           {question.options.map((option) => {
@@ -656,7 +713,7 @@ function AnswerOptionEditors({ form, uploadingImageField, onImageUpload, mathEna
                 label={`Answer ${label}`}
                 className="option-rich-math-editor"
                 placeholder={`Write answer ${label} with text or formulas.`}
-                rules={editAnswerChoiceRules(form)}
+                rules={editAnswerChoiceRules(form, label)}
                 showMathTemplates={mathEnabled}
               />
               <QuestionEditorImageField

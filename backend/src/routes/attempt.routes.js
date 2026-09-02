@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   answerAttempt,
+  completeSection,
   getAttempt,
   getMyAttempts,
   startAttempt,
@@ -16,6 +17,7 @@ const router = Router();
 router.use(requireAuth);
 router.post('/start', requireStudent, validate(startAttemptSchema), asyncHandler(startAttempt));
 router.post('/:id/answer', requireStudent, validate(answerSchema), asyncHandler(answerAttempt));
+router.post('/:id/sections/:sectionId/complete', requireStudent, asyncHandler(completeSection));
 router.post('/:id/submit', requireStudent, asyncHandler(submitAttemptController));
 router.get('/me', requireStudent, asyncHandler(getMyAttempts));
 router.get('/user/me', requireStudent, asyncHandler(getMyAttempts));

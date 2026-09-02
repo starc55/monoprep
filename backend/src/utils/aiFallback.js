@@ -12,6 +12,15 @@ function buildRoadmap(weaknesses) {
 }
 
 export function buildFallbackFeedback(summary) {
+  const totalSatScore = summary.totalScore > 100
+    ? Math.round(summary.totalScore)
+    : Math.round(400 + summary.totalScore * 12);
+  const readingWritingSatScore = summary.readingWritingScore > 100
+    ? Math.round(summary.readingWritingScore)
+    : Math.round(200 + summary.readingWritingScore * 6);
+  const mathSatScore = summary.mathScore > 100
+    ? Math.round(summary.mathScore)
+    : Math.round(200 + summary.mathScore * 6);
   const strengths = summary.skillBreakdown
     .filter((skill) => skill.accuracy >= 75)
     .map((skill) => skill.skill);
@@ -21,13 +30,13 @@ export function buildFallbackFeedback(summary) {
 
   return {
     overallFeedback:
-      summary.totalScore >= 80
+      totalSatScore >= 1360
         ? 'Strong overall performance with a solid command of core SAT skills.'
         : 'This attempt shows useful progress and a clear set of target areas for improvement.',
     estimatedScore: {
-      total: Math.round(400 + summary.totalScore * 12),
-      readingWriting: Math.round(200 + summary.readingWritingScore * 6),
-      math: Math.round(200 + summary.mathScore * 6),
+      total: totalSatScore,
+      readingWriting: readingWritingSatScore,
+      math: mathSatScore,
       listening: Math.round(summary.listeningScore)
     },
     strengths: strengths.length ? strengths : ['Consistent effort across the exam'],

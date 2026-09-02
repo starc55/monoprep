@@ -1,4 +1,5 @@
 import {
+  completeAttemptSection,
   getAttemptById,
   listAttemptsForUser,
   saveAttemptAnswer,
@@ -14,6 +15,15 @@ export const startAttempt = async (req, res) => {
 export async function answerAttempt(req, res) {
   const answer = await saveAttemptAnswer(req.params.id, req.user.id, req.body);
   res.json({ answer });
+}
+
+export async function completeSection(req, res) {
+  const attempt = await completeAttemptSection(
+    req.params.id,
+    req.params.sectionId,
+    req.user.id
+  );
+  res.json({ attempt });
 }
 
 export async function submitAttemptController(req, res) {

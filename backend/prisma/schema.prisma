@@ -97,6 +97,18 @@ enum Difficulty {
   HARD
 }
 
+enum ScoringModel {
+  SAT_ESTIMATE_V1
+  RAW_PERCENT
+}
+
+enum AdaptiveModuleRole {
+  STANDARD
+  MODULE_1
+  MODULE_2_LOWER
+  MODULE_2_HIGHER
+}
+
 enum AttemptStatus {
   IN_PROGRESS
   SUBMITTED
@@ -309,6 +321,8 @@ model Exam {
   competitionStartsAt DateTime?       @map("competition_starts_at")
   competitionEndsAt   DateTime?       @map("competition_ends_at")
   referenceText       String?         @map("reference_text")
+  scoringModel        ScoringModel    @default(SAT_ESTIMATE_V1) @map("scoring_model")
+  scoreConversion     Json?           @map("score_conversion")
   totalDuration       Int             @map("total_duration")
   isPublished         Boolean         @default(false) @map("is_published")
   createdAt           DateTime        @default(now()) @map("created_at")
@@ -377,6 +391,8 @@ model Section {
   type      SectionType
   duration  Int
   order     Int         @map("order_index")
+  adaptiveRole     AdaptiveModuleRole @default(STANDARD) @map("adaptive_role")
+  routingThreshold Int                @default(60) @map("routing_threshold")
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
   exam      Exam        @relation(fields: [examId], references: [id], onDelete: Cascade)
@@ -408,11 +424,13 @@ model Question {
   type              QuestionType
   skill             String
   difficulty        Difficulty
+  isPretest         Boolean      @default(false) @map("is_pretest")
   questionText      String       @map("question_text")
   audioUrl          String?      @map("audio_url")
   audioTitle        String?      @map("audio_title")
   instructions      String?
   imageUrl          String?      @map("image_url")
+  imagePlacement    String       @default("ABOVE") @map("image_placement")
   formulaText       String?      @map("formula_text")
   tableData         Json?        @map("table_data")
   calculatorAllowed Boolean      @default(false) @map("calculator_allowed")
@@ -462,6 +480,7 @@ model Attempt {
   mathScore           Int?          @map("math_score")
   listeningScore      Int?          @map("listening_score")
   timeSpent           Int           @default(0) @map("time_spent")
+  selectedRoutes      Json?         @map("selected_routes")
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
   user                User          @relation(fields: [userId], references: [id], onDelete: Cascade)

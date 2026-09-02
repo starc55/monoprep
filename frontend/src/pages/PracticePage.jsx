@@ -78,8 +78,15 @@ function getExamAttempts(attempts, examId) {
   };
 }
 
-function formatScore(score) {
-  return score === null || score === undefined ? "Not taken" : `${score}%`;
+function toSatScore(score, section = false) {
+  if (score === null || score === undefined) return null;
+  if (score > 100) return Math.round(score);
+  return Math.round((section ? 200 : 400) + (score / 100) * (section ? 600 : 1200));
+}
+
+function formatScore(score, section = false) {
+  const satScore = toSatScore(score, section);
+  return satScore === null ? "Not taken" : String(satScore);
 }
 
 function ExamCard({ row, canUsePremium }) {
@@ -203,14 +210,14 @@ function ExamCard({ row, canUsePremium }) {
             <div className="score-sections">
               <span>
                 Reading/Writing{" "}
-                <strong>{formatScore(attempt.readingWritingScore)}</strong>
+                <strong>{formatScore(attempt.readingWritingScore, true)}</strong>
               </span>
               <span>
-                Math <strong>{formatScore(attempt.mathScore)}</strong>
+                Math <strong>{formatScore(attempt.mathScore, true)}</strong>
               </span>
             </div>
           </div>
-          <ProgressBar value={attempt.totalScore || 0} tone="green" />
+          <ProgressBar value={Math.max(0, Math.min(100, ((toSatScore(attempt.totalScore) || 400) - 400) / 12))} tone="green" />
         </div>
       ) : (
         <div className="paper-metrics">

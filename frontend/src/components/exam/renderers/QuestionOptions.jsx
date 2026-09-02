@@ -33,30 +33,32 @@ export default function QuestionOptions({
     <div className={`choice-list ${eliminateMode ? 'elimination-mode' : ''}`.trim()}>
       {(question.options || []).map((option) => (
         <div key={option.id || option.label} className="choice-row">
-          {eliminateMode ? <button
+          <button
             type="button"
             className={`choice-item ${selectedValues.includes(option.label) ? 'selected' : ''} ${eliminatedValues.includes(option.label) ? 'eliminated' : ''}`.trim()}
             onClick={() => toggleValue(option.label)}
           >
             <span className="choice-label">{option.label}</span>
-            <span className="choice-content">
-              <MathJaxContent className="choice-text">{option.text}</MathJaxContent>
+            <div className="choice-content">
+              {option.text ? <MathJaxContent block className="choice-text">{option.text}</MathJaxContent> : null}
               {option.imageUrl ? (
                 <span className="choice-media">
                   <img src={resolveAssetUrl(option.imageUrl)} alt={`Answer choice ${option.label} image`} />
                 </span>
               ) : null}
-            </span>
-          </button> : null}
-          <button
-            type="button"
-            className={`eliminate-choice ${eliminatedValues.includes(option.label) ? 'active' : ''}`.trim()}
-            aria-label={`${eliminatedValues.includes(option.label) ? 'Restore' : 'Eliminate'} ${option.label}`}
-            aria-pressed={eliminatedValues.includes(option.label)}
-            onClick={() => onToggleEliminated?.(option.label)}
-          >
-            {option.label}
+            </div>
           </button>
+          {eliminateMode ? (
+            <button
+              type="button"
+              className={`eliminate-choice ${eliminatedValues.includes(option.label) ? 'active' : ''}`.trim()}
+              aria-label={`${eliminatedValues.includes(option.label) ? 'Restore' : 'Eliminate'} ${option.label}`}
+              aria-pressed={eliminatedValues.includes(option.label)}
+              onClick={() => onToggleEliminated?.(option.label)}
+            >
+              {option.label}
+            </button>
+          ) : null}
         </div>
       ))}
     </div>

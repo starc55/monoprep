@@ -8,17 +8,27 @@ const optionalAssetUrlSchema = z
   .nullable()
   .optional();
 
-const questionOptionSchema = z.object({
+const questionOptionFields = {
   label: z.string().min(1).max(5),
-  text: z.string().min(1),
+  text: z.string().max(20000),
   imageUrl: optionalAssetUrlSchema,
   isCorrect: z.boolean().optional(),
   order: z.number().int().nonnegative().optional(),
-});
+};
 
-export const optionSchema = questionOptionSchema.extend({
+function requireOptionContent(schema) {
+  return schema.refine(
+    (option) => option.text.trim().length > 0 || Boolean(option.imageUrl),
+    { message: "Answer choice needs text or an image." }
+  );
+}
+
+const questionOptionSchema = requireOptionContent(z.object(questionOptionFields));
+
+export const optionSchema = requireOptionContent(z.object({
+  ...questionOptionFields,
   questionId: z.string().min(1),
-});
+}));
 
 export const updateProfileSchema = z.object({
   fullName: z.string().min(2).max(120).optional(),
@@ -39,6 +49,8 @@ export const examSchema = z.object({
   accessType: z.enum(["FREE", "PAID"]).optional(),
   contentMode: z.enum(["REAL_EXAM", "QUESTION_HUB"]).optional(),
   source: z.enum(["MONOPREP", "OFFICIAL"]).optional(),
+  scoringModel: z.enum(["SAT_ESTIMATE_V1", "RAW_PERCENT"]).optional(),
+  scoreConversion: z.any().nullable().optional(),
   competitionKind: z.enum(["NONE", "FULL", "MATH", "ENGLISH"]).optional(),
     competitionStartsAt: z.coerce.date().nullable().optional(),
     competitionEndsAt: z.coerce.date().nullable().optional(),
@@ -53,6 +65,8 @@ export const sectionSchema = z.object({
   type: z.enum(["reading_writing", "math", "custom_practice"]),
   duration: z.number().int().positive(),
   order: z.number().int().nonnegative(),
+  adaptiveRole: z.enum(["STANDARD", "MODULE_1", "MODULE_2_LOWER", "MODULE_2_HIGHER"]).optional(),
+  routingThreshold: z.number().int().min(0).max(100).optional(),
 });
 
 export const sectionUpdateSchema = sectionSchema.partial().extend({
@@ -89,11 +103,13 @@ export const questionSchema = z.object({
   ]),
   skill: z.string().min(2),
   difficulty: z.enum(["EASY", "MEDIUM", "HARD"]),
+  isPretest: z.boolean().optional(),
   questionText: z.string().min(3),
   audioUrl: optionalAssetUrlSchema,
   audioTitle: z.string().max(160).nullable().optional(),
   instructions: z.string().max(1000).nullable().optional(),
   imageUrl: optionalAssetUrlSchema,
+  imagePlacement: z.enum(["ABOVE", "BELOW"]).optional(),
   formulaText: z.string().max(2000).nullable().optional(),
   tableData: z.any().nullable().optional(),
   calculatorAllowed: z.boolean().optional(),
@@ -165,9 +181,12 @@ export const blitzSubmitSchema = z.object({
 
 const questionBankChoiceSchema = z.object({
   label: z.string().min(1).max(5),
-  text: z.string().min(1).max(2000),
+  text: z.string().max(2000),
   imageUrl: optionalAssetUrlSchema,
-});
+}).refine(
+  (choice) => choice.text.trim().length > 0 || Boolean(choice.imageUrl),
+  { message: "Answer choice needs text or an image." }
+);
 
 export const questionBankItemSchema = z.object({
   sourceQuestionId: z.string().min(1).max(120).optional(),

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   BadgeCheck,
   Camera,
+  Expand,
   Mail,
   Save,
   Sparkles,
@@ -12,10 +13,12 @@ import AppLayout from '../layouts/AppLayout.jsx';
 import Button from '../components/ui/Button.jsx';
 import Card from '../components/ui/Card.jsx';
 import ProgressBar from '../components/ui/ProgressBar.jsx';
+import Modal from '../components/ui/Modal.jsx';
 import { useAuthStore } from '../store/authStore.js';
 import { uploadAvatar } from '../services/authService.js';
 import { getMyAnalytics } from '../services/analyticsService.js';
 import { getLeagueFromScore, getLevelFromScore } from '../utils/league.js';
+import { resolveAssetUrl } from '../utils/assets.js';
 
 function getInitials(name = '') {
   return name
@@ -35,6 +38,7 @@ export default function ProfilePage() {
   const fileInputRef = useRef(null);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [avatarPreviewOpen, setAvatarPreviewOpen] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [saveSuccess, setSaveSuccess] = useState('');
   const [analytics, setAnalytics] = useState(null);
@@ -93,15 +97,27 @@ export default function ProfilePage() {
   return (
     <AppLayout title="Profile" subtitle="Manage your account information and track your prep momentum.">
       <section className="profile-hero">
-        <button
-          type="button"
-          className="profile-avatar editable-avatar"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploadingAvatar}
-        >
-          {avatarUrl ? <img src={avatarUrl} alt="" /> : getInitials(user?.fullName)}
-          <span><Camera aria-hidden="true" /> {uploadingAvatar ? 'Uploading...' : 'Change image'}</span>
-        </button>
+        <div className="profile-avatar-control">
+          <button
+            type="button"
+            className="profile-avatar editable-avatar"
+            onClick={() => avatarUrl ? setAvatarPreviewOpen(true) : fileInputRef.current?.click()}
+            aria-label={avatarUrl ? 'Open profile image preview' : 'Upload profile image'}
+          >
+            {avatarUrl ? <img src={resolveAssetUrl(avatarUrl)} alt={`${user?.fullName || 'Student'} profile`} /> : getInitials(user?.fullName)}
+            <span>{avatarUrl ? <Expand aria-hidden="true" /> : <Camera aria-hidden="true" />} {avatarUrl ? 'View image' : 'Add image'}</span>
+          </button>
+          <button
+            type="button"
+            className="profile-avatar-upload-button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploadingAvatar}
+            aria-label="Change profile image"
+            title="Change profile image"
+          >
+            <Camera aria-hidden="true" />
+          </button>
+        </div>
         <input
           ref={fileInputRef}
           className="sr-only"
@@ -138,7 +154,7 @@ export default function ProfilePage() {
             </label>
             <div className="profile-upload-hint">
               <Camera aria-hidden="true" />
-              <span>Click your avatar above to upload a profile image.</span>
+              <span>Use the camera button to replace your profile image.</span>
             </div>
             <label className="form-field">
               <span><Mail aria-hidden="true" /> Email address</span>
@@ -160,6 +176,28 @@ export default function ProfilePage() {
           <ProgressBar value={Math.min(100, Math.round((bestScore / 1600) * 100))} />
         </section>
       </div>
+
+      <Modal
+        open={avatarPreviewOpen}
+        title="Profile image"
+        className="profile-image-preview-modal"
+        onClose={() => setAvatarPreviewOpen(false)}
+        actions={(
+          <>
+            <Button variant="ghost" onClick={() => setAvatarPreviewOpen(false)}>Close</Button>
+            <Button onClick={() => fileInputRef.current?.click()} disabled={uploadingAvatar}>
+              <Camera aria-hidden="true" />
+              {uploadingAvatar ? 'Uploading...' : 'Change image'}
+            </Button>
+          </>
+        )}
+      >
+        {avatarUrl ? (
+          <div className="profile-image-preview-stage">
+            <img src={resolveAssetUrl(avatarUrl)} alt={`${user?.fullName || 'Student'} profile preview`} />
+          </div>
+        ) : null}
+      </Modal>
     </AppLayout>
   );
 }

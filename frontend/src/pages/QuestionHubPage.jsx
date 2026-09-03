@@ -137,7 +137,6 @@ export default function QuestionHubPage() {
   const [sourceMode, setSourceMode] = useState('COLLEGE_BOARD');
   const [query, setQuery] = useState('');
   const [subject, setSubject] = useState('ALL');
-  const [selectedDomains, setSelectedDomains] = useState([]);
   const [difficulty, setDifficulty] = useState('ALL');
   const [answeredStatus, setAnsweredStatus] = useState('ALL');
   const [markedFilter, setMarkedFilter] = useState('ALL');
@@ -194,16 +193,6 @@ export default function QuestionHubPage() {
     return () => window.clearInterval(timer);
   }, [activeSession]);
 
-  const availableDomains = useMemo(() => {
-    const sourceItems = items.filter((item) => (
-      sourceMode === 'PRACTICE_TESTS'
-        ? item.source === 'practice_exam'
-        : item.source !== 'practice_exam'
-    ));
-    const subjects = subject === 'ALL' ? sourceItems : sourceItems.filter((item) => item.subject === subject);
-    return groupBy(subjects, 'domain');
-  }, [items, sourceMode, subject]);
-
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
       const saved = results[item.id];
@@ -213,7 +202,6 @@ export default function QuestionHubPage() {
         ? item.source === 'practice_exam'
         : item.source !== 'practice_exam';
       const matchesSubject = subject === 'ALL' || item.subject === subject;
-      const matchesDomain = !selectedDomains.length || selectedDomains.includes(item.domain);
       const matchesDifficulty = difficulty === 'ALL' || item.difficulty === difficulty;
       const matchesMarked =
         markedFilter === 'ALL' ||
@@ -227,9 +215,9 @@ export default function QuestionHubPage() {
         (answeredStatus === 'INCORRECT' && saved?.answered && !saved?.correct) ||
         (answeredStatus === 'NOT_ANSWERED' && !saved?.answered);
 
-      return matchesSource && matchesQuery && matchesSubject && matchesDomain && matchesDifficulty && matchesMarked && matchesBluebook && matchesAnswered;
+      return matchesSource && matchesQuery && matchesSubject && matchesDifficulty && matchesMarked && matchesBluebook && matchesAnswered;
     });
-  }, [answeredStatus, bluebookFilter, difficulty, items, markedFilter, query, results, selectedDomains, sourceMode, subject]);
+  }, [answeredStatus, bluebookFilter, difficulty, items, markedFilter, query, results, sourceMode, subject]);
 
   const catalog = useMemo(() => Object.values(QUESTION_HUB_CATALOG)
     .filter((subjectCatalog) => subject === 'ALL' || subjectCatalog.subject === subject)
@@ -284,20 +272,12 @@ export default function QuestionHubPage() {
   function resetFilters() {
     setQuery('');
     setSubject('ALL');
-    setSelectedDomains([]);
     setDifficulty('ALL');
     setAnsweredStatus('ALL');
     setMarkedFilter('ALL');
     setBluebookFilter('INCLUDED');
   }
 
-  function toggleDomain(domain) {
-    setSelectedDomains((current) => (
-      current.includes(domain)
-        ? current.filter((item) => item !== domain)
-        : [...current, domain]
-    ));
-  }
 
   function showSummary() {
     setStage('summary');
@@ -689,34 +669,12 @@ export default function QuestionHubPage() {
                 className={subject === value ? 'active' : ''}
                 onClick={() => {
                   setSubject(value);
-                  setSelectedDomains([]);
                 }}
               >
                 {value === 'ALL' ? 'All Subjects' : value}
               </button>
             ))}
           </div>
-        </div>
-
-        <div className="qhub-filter-section">
-          <h3><Filter aria-hidden="true" /> Domains</h3>
-          {Object.keys(availableDomains).length ? (
-            <div className="qhub-domain-selector">
-              {Object.entries(availableDomains).map(([domain, rows]) => (
-                <button
-                  key={domain}
-                  type="button"
-                  className={selectedDomains.includes(domain) ? 'active' : ''}
-                  onClick={() => toggleDomain(domain)}
-                >
-                  <strong>{domain}</strong>
-                  <span>{rows.length} questions</span>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="helper-copy">No domains are available for the selected source yet.</p>
-          )}
         </div>
 
         <div className="qhub-filter-grid">

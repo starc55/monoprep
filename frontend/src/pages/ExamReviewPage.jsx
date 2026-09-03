@@ -28,7 +28,11 @@ import { getDisplayAnswer } from "../utils/exam.js";
 import { formatSeconds } from "../utils/format.js";
 import { useAuthStore } from "../store/authStore.js";
 
-const filters = ["ALL", "CORRECT", "INCORRECT", "MARKED", "UNANSWERED"];
+const subjectFilters = [
+  { value: "ALL", label: "All" },
+  { value: "READING_WRITING", label: "R&W" },
+  { value: "MATH", label: "Math" },
+];
 const viewCountOptions = [
   { value: "10", label: "10" },
   { value: "30", label: "30" },
@@ -142,7 +146,7 @@ export default function ExamReviewPage() {
   const [loading, setLoading] = useState(true);
   const [attempt, setAttempt] = useState(null);
   const [feedback, setFeedback] = useState(null);
-  const [filter, setFilter] = useState("ALL");
+  const [subjectFilter, setSubjectFilter] = useState("ALL");
   const [viewCount, setViewCount] = useState("10");
   const [showCorrectAnswers, setShowCorrectAnswers] = useState(false);
   const [selectedRow, setSelectedRow] = useState(null);
@@ -182,24 +186,29 @@ export default function ExamReviewPage() {
     const answerMap = Object.fromEntries(
       attempt.answers.map((answer) => [answer.questionId, answer])
     );
-    return attempt.exam.sections
-      .flatMap((section) =>
-        section.questions.map((question, index) => {
+    return attempt.exam.sections.flatMap((section) => {
+        const moduleNumber = attempt.exam.sections
+          .filter((candidate) => candidate.type === section.type)
+          .findIndex((candidate) => candidate.id === section.id) + 1;
+        const subject = section.type === "math" ? "Math" : "Reading & Writing";
+        const moduleLabel = `${section.type === "math" ? "Math" : "R&W"} - M${moduleNumber}`;
+        return section.questions.map((question, index) => {
           const answer = answerMap[question.id];
-          const subject = section.type === "math" ? "Math" : "Reading & Writing";
           return {
             id: question.id,
             number: index + 1,
             section: section.title,
+            moduleLabel,
+            moduleId: section.id,
+            moduleTotal: section.questions.length,
             subject,
             domain: getReportDomain(subject, question.skill),
             question,
             answer,
             status: getAnswerStatus(answer),
           };
-        })
-      )
-      .map((row, index) => ({ ...row, number: index + 1 }));
+        });
+      });
   }, [attempt]);
 
   const overview = useMemo(
@@ -220,15 +229,19 @@ export default function ExamReviewPage() {
   );
 
   const visibleRows = useMemo(() => {
-    const filtered = rows.filter((row) => {
-      if (filter === "MARKED") return Boolean(row.answer?.markedForReview);
-      return filter === "ALL" || row.status === filter;
-    });
+    const filtered = rows.filter((row) => subjectFilter === "ALL"
+      || (subjectFilter === "MATH" && row.subject === "Math")
+      || (subjectFilter === "READING_WRITING" && row.subject === "Reading & Writing"));
     return viewCount === "ALL"
       ? filtered
       : filtered.slice(0, Number(viewCount));
-  }, [filter, rows, viewCount]);
-  const selectedRowIndex = selectedRow ? rows.findIndex((row) => row.id === selectedRow.id) : -1;
+  }, [rows, subjectFilter, viewCount]);
+  const selectedModuleRows = selectedRow
+    ? rows.filter((row) => row.moduleId === selectedRow.moduleId)
+    : [];
+  const selectedRowIndex = selectedRow
+    ? selectedModuleRows.findIndex((row) => row.id === selectedRow.id)
+    : -1;
 
   if (loading) {
     return (
@@ -412,15 +425,15 @@ export default function ExamReviewPage() {
           </label>
         </div>
         <div className="review-toolbar">
-          <div className="review-filters">
-            {filters.map((item) => (
+          <div className="review-filters review-subject-filters" aria-label="Review subject filter">
+            {subjectFilters.map((item) => (
               <button
-                key={item}
+                key={item.value}
                 type="button"
-                className={filter === item ? "active" : ""}
-                onClick={() => setFilter(item)}
+                className={subjectFilter === item.value ? "active" : ""}
+                onClick={() => setSubjectFilter(item.value)}
               >
-                {statusLabel(item)}
+                {item.label}
               </button>
             ))}
           </div>
@@ -454,7 +467,7 @@ export default function ExamReviewPage() {
                 {visibleRows.map((row) => (
                   <tr key={row.id}>
                     <td>#{row.number}</td>
-                    <td>{row.section}</td>
+                    <td><span className="review-module-label">{row.moduleLabel}</span><small>{row.section}</small></td>
                     <td>{row.question.skill}</td>
                     <td>
                       {showCorrectAnswers
@@ -497,7 +510,7 @@ export default function ExamReviewPage() {
             }
             message={
               rows.length
-                ? "Choose another status filter to review your submitted responses."
+                ? "Choose another subject filter to review your submitted responses."
                 : "This result does not include question-level review data yet."
             }
           />
@@ -522,27 +535,23 @@ export default function ExamReviewPage() {
         {selectedRow ? (
           <div className="review-detail">
             <div className="review-modal-toolbar">
+              <div className="review-modal-context">
+                <span className="pill blue">{selectedRow.moduleLabel}</span>
+                <span className="pill">{selectedRow.question.skill}</span>
+                <span className={`pill ${selectedRow.status === "CORRECT" ? "success" : selectedRow.status === "INCORRECT" ? "danger" : "warning"}`}>
+                  {statusLabel(selectedRow.status)}
+                </span>
+              </div>
               <button type="button" onClick={() => setReviewAnswersVisible((value) => !value)}>
                 <Eye aria-hidden="true" /> {reviewAnswersVisible ? "Hide answers" : "Show answers"}
               </button>
-              <button type="button" disabled={selectedRowIndex <= 0} onClick={() => setSelectedRow(rows[selectedRowIndex - 1])}>
+              <button type="button" disabled={selectedRowIndex <= 0} onClick={() => setSelectedRow(selectedModuleRows[selectedRowIndex - 1])}>
                 <ChevronLeft aria-hidden="true" /> Previous
               </button>
-              <span>{selectedRowIndex + 1} of {rows.length}</span>
-              <button type="button" disabled={selectedRowIndex >= rows.length - 1} onClick={() => setSelectedRow(rows[selectedRowIndex + 1])}>
+              <span>{selectedRowIndex + 1} of {selectedModuleRows.length}</span>
+              <button type="button" disabled={selectedRowIndex >= selectedModuleRows.length - 1} onClick={() => setSelectedRow(selectedModuleRows[selectedRowIndex + 1])}>
                 Next <ChevronRight aria-hidden="true" />
               </button>
-            </div>
-            <div className="review-detail-tags">
-              <span className="pill blue">{selectedRow.section}</span>
-              <span className="pill">{selectedRow.question.skill}</span>
-              <span
-                className={`pill ${
-                  selectedRow.status === "CORRECT" ? "success" : "danger"
-                }`}
-              >
-                {statusLabel(selectedRow.status)}
-              </span>
             </div>
             {selectedRow.question.passage ? (
               <section className="review-passage-material">

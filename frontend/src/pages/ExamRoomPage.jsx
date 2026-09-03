@@ -377,7 +377,7 @@ export default function ExamRoomPage() {
       directions: {
         title: `${currentSection.title} directions`,
         body: [
-          `Answer every question in this section. This module is timed for ${currentSection.duration} minutes.`,
+          `Answer questions in any order. You may leave an item unanswered and return to it before the ${currentSection.duration}-minute module ends.`,
           "Use Previous and Next to move between questions. Use the question selector to jump directly to any item.",
           "Mark for Review keeps a flag on the current question so you can return before submitting the section.",
         ],

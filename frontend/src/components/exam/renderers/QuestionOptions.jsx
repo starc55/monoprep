@@ -8,7 +8,8 @@ export default function QuestionOptions({
   multiple = false,
   eliminatedValues = [],
   onToggleEliminated,
-  eliminateMode = false
+  eliminateMode = false,
+  className = ''
 }) {
   const selectedValues = Array.isArray(value?.values)
     ? value.values
@@ -30,7 +31,7 @@ export default function QuestionOptions({
   }
 
   return (
-    <div className={`choice-list ${eliminateMode ? 'elimination-mode' : ''}`.trim()}>
+    <div className={`choice-list ${className} ${eliminateMode ? 'elimination-mode' : ''}`.trim()}>
       {(question.options || []).map((option) => (
         <div key={option.id || option.label} className="choice-row">
           <button

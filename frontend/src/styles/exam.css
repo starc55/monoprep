@@ -1133,6 +1133,13 @@
   margin-top: 1.35rem;
 }
 
+.math-choice-list {
+  width: min(100%, 640px);
+  margin-right: auto;
+  margin-left: auto;
+  gap: 0.58rem;
+}
+
 .choice-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -1211,6 +1218,20 @@
 
 .choice-item.selected .choice-label {
   color: #245eea;
+}
+
+.math-choice-list .choice-item {
+  min-height: 50px;
+  padding: 0.62rem 0.78rem;
+  gap: 0.7rem;
+  font-size: 0.96rem;
+}
+
+.math-choice-list .choice-label {
+  width: 30px;
+  height: 30px;
+  border-width: 1.5px;
+  font-size: 0.82rem;
 }
 
 .answer-elimination-toggle {

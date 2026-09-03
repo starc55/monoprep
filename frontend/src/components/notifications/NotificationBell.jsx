@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { Bell, CheckCheck, Sparkles } from 'lucide-react';
 import { getNotifications, markAllNotificationsRead, markNotificationRead } from '../../services/notificationService.js';
@@ -8,22 +8,25 @@ function formatType(type = '') {
 }
 
 export default function NotificationBell() {
+  const rootRef = useRef(null);
   const [open, setOpen] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
 
-  async function loadNotifications() {
-    setLoading(true);
+  async function loadNotifications({ silent = false } = {}) {
+    if (!silent) setLoading(true);
     try {
       const response = await getNotifications();
       setItems(response.items || []);
       setUnreadCount(response.unreadCount || 0);
     } catch (_error) {
-      setItems([]);
-      setUnreadCount(0);
+      if (!silent) {
+        setItems([]);
+        setUnreadCount(0);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }
 
@@ -31,27 +34,55 @@ export default function NotificationBell() {
     loadNotifications();
   }, []);
 
-  async function readOne(id) {
-    await markNotificationRead(id);
-    await loadNotifications();
+  useEffect(() => {
+    if (!open) return undefined;
+
+    function closeOnOutsideClick(event) {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    }
+
+    function closeOnEscape(event) {
+      if (event.key === 'Escape') setOpen(false);
+    }
+
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    document.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.removeEventListener('pointerdown', closeOnOutsideClick);
+      document.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [open]);
+
+  function readOne(id) {
+    const notification = items.find((item) => item.id === id);
+    if (!notification || notification.isRead) return;
+
+    setItems((current) => current.map((item) => (
+      item.id === id ? { ...item, isRead: true } : item
+    )));
+    setUnreadCount((current) => Math.max(0, current - 1));
+    void markNotificationRead(id).catch(() => loadNotifications({ silent: true }));
   }
 
-  async function readAll() {
-    await markAllNotificationsRead();
-    await loadNotifications();
+  function readAll() {
+    if (!unreadCount) return;
+
+    setItems((current) => current.map((item) => ({ ...item, isRead: true })));
+    setUnreadCount(0);
+    void markAllNotificationsRead().catch(() => loadNotifications({ silent: true }));
   }
 
   return (
-    <div className="notification-bell">
+    <div className="notification-bell" ref={rootRef}>
       <button
         type="button"
         className="notification-trigger"
-        aria-label="Open notifications"
+        aria-label={unreadCount ? `Open notifications, ${unreadCount} unread` : 'Open notifications'}
         aria-expanded={open}
         onClick={() => setOpen((value) => !value)}
       >
         <Bell aria-hidden="true" />
-        {unreadCount ? <span>{unreadCount > 9 ? '9+' : unreadCount}</span> : null}
+        {unreadCount ? <span className="notification-dot" aria-hidden="true" /> : null}
       </button>
       <AnimatePresence>
         {open ? (
@@ -60,14 +91,14 @@ export default function NotificationBell() {
             initial={{ opacity: 0, y: -8, scale: 0.96 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
-            transition={{ duration: 0.18 }}
+            transition={{ type: 'spring', stiffness: 420, damping: 32 }}
           >
             <div className="notification-popover-head">
               <div>
                 <strong>Notifications</strong>
                 <span>{unreadCount} unread</span>
               </div>
-              <button type="button" onClick={readAll} disabled={!unreadCount}>
+              <button type="button" onClick={readAll} disabled={!unreadCount} aria-label="Mark all notifications as read" title="Mark all as read">
                 <CheckCheck aria-hidden="true" />
               </button>
             </div>

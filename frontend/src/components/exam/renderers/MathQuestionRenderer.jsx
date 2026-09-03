@@ -49,6 +49,7 @@ export default function MathQuestionRenderer({
         <QuestionOptions
           question={question}
           value={value}
+          className="math-choice-list"
           onChange={onChange}
           eliminatedValues={eliminatedValues}
           onToggleEliminated={onToggleEliminated}

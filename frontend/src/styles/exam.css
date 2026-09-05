@@ -785,16 +785,20 @@
 
 .passage-panel {
   max-height: calc(100vh - 148px);
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 1.22rem;
-  line-height: 1.5;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 1rem;
+  line-height: 1.34;
 }
 
 .passage-panel h2 {
-  margin: 0.2rem 0 1rem;
+  margin: 0.15rem 0 0.7rem;
   font-family: 'Manrope', Arial, sans-serif;
-  font-size: 1.25rem;
-  line-height: 1.25;
+  font-size: 1.05rem;
+  line-height: 1.2;
+}
+
+.passage-content > p {
+  margin: 0;
 }
 
 .passage-panel.empty {
@@ -1114,23 +1118,27 @@
 
 .question-body h3,
 .question-body .question-prompt {
-  margin: 0.75rem 0 0;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-weight: 500;
-  line-height: 1.38;
-  font-size: 1.12rem;
+  margin: 0.65rem 0 0;
+  font-family: 'Times New Roman', Times, serif;
+  font-weight: 400;
+  line-height: 1.3;
+  font-size: 1rem;
 }
 
 .question-body .question-prompt ul,
 .question-body .question-prompt ol {
-  margin: 0.75rem 0;
-  padding-left: 1.5rem;
+  margin: 0.45rem 0;
+  padding-left: 1.35rem;
+}
+
+.question-body .question-prompt li {
+  margin: 0.1rem 0;
 }
 
 .choice-list {
   display: grid;
-  gap: 0.85rem;
-  margin-top: 1.35rem;
+  gap: 0.62rem;
+  margin-top: 0.9rem;
 }
 
 .math-choice-list {
@@ -1152,26 +1160,26 @@
 }
 
 .choice-item {
-  min-height: 64px;
+  min-height: 50px;
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 0.9rem;
+  gap: 0.7rem;
   align-items: center;
-  padding: 0.9rem 1rem;
+  padding: 0.62rem 0.78rem;
   border-radius: 8px;
   border: 1.5px solid #b8b8b8;
   background: #ffffff;
   text-align: left;
   cursor: pointer;
-  font-family: Georgia, 'Times New Roman', serif;
-  font-size: 1.12rem;
-  line-height: 1.35;
+  font-family: 'Times New Roman', Times, serif;
+  font-size: 1rem;
+  line-height: 1.24;
   transition: background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
 }
 
 .choice-content {
   display: grid;
-  gap: 0.7rem;
+  gap: 0.5rem;
   min-width: 0;
 }
 
@@ -1260,13 +1268,14 @@
 }
 
 .choice-label {
-  width: 36px;
-  height: 36px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  border: 2px solid currentColor;
+  border: 1.5px solid currentColor;
   font-family: 'Manrope', Arial, sans-serif;
+  font-size: 0.78rem;
   font-weight: 800;
 }
 
@@ -2045,12 +2054,14 @@
   }
 
   .passage-panel {
-    font-size: 1rem;
+    font-size: 0.98rem;
+    line-height: 1.34;
   }
 
   .question-body h3,
   .question-body .question-prompt {
-    font-size: 1.12rem;
+    font-size: 0.98rem;
+    line-height: 1.3;
   }
 
   .question-panel-head {

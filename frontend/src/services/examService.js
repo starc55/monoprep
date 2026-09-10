@@ -79,6 +79,15 @@ export async function uploadPassageFile(file) {
   return data;
 }
 
+export async function previewPdfQuestionImport(file) {
+  const body = new FormData();
+  body.append('file', file);
+  const { data } = await api.post('/ai/pdf-import/preview', body, {
+    timeout: 600000
+  });
+  return data;
+}
+
 export async function uploadTeacherImage(file) {
   const body = new FormData();
   body.append('image', file);

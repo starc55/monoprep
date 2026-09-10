@@ -31,8 +31,9 @@ export const env = {
   supabasePublishableKey: requireEnv('SUPABASE_PUBLISHABLE_KEY'),
   supabaseServiceRoleKey: process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() || '',
   examSubmissionGraceMinutes: positiveInteger('EXAM_SUBMISSION_GRACE_MINUTES', 15),
-  openAiApiKey: process.env.OPENAI_API_KEY || '',
-  openAiModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+  openAiApiKey: process.env.OPENAI_API_KEY?.trim() || '',
+  openAiModel: process.env.OPENAI_MODEL?.trim() || 'gpt-5.4-mini',
+  openAiTimeoutMs: positiveInteger('OPENAI_TIMEOUT_MS', 30_000),
   clientUrl: requireEnv('CLIENT_URL', 'http://localhost:5173'),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
   telegramChatId: process.env.TELEGRAM_CHAT_ID || ''

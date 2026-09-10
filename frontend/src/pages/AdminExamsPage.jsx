@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useState } from "react";
-import { ChevronDown, Eye, FileQuestion, FileText, Pencil, Plus, Trash2, Upload, X } from "lucide-react";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { AlertTriangle, CheckCircle2, ChevronDown, Eye, FileQuestion, FileText, Pencil, Plus, Trash2, Upload, X, XCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import AdminLayout from "../layouts/AdminLayout.jsx";
 import TeacherLayout from "../layouts/TeacherLayout.jsx";
@@ -28,7 +28,7 @@ import "../styles/pages/teacher-exams.css";
 import {
   createExam, createPassage, createQuestion, createSection, deleteExam, deleteQuestion,
   deleteSection, getExam, getExams, getPassages, updateExam, updateQuestion,
-  updatePassage, updateSection, uploadPassageFile, uploadQuestionImage,
+  updatePassage, updateSection, uploadPassageFile, uploadQuestionImage, previewPdfQuestionImport,
 } from "../services/examService.js";
 import { createQuestionBankItem } from "../services/questionBankService.js";
 
@@ -108,6 +108,11 @@ export default function AdminExamsPage({ mode = "admin" }) {
   const [confirmPending, setConfirmPending] = useState(false);
   const [editingImageField, setEditingImageField] = useState("");
   const [editingPassageFile, setEditingPassageFile] = useState(false);
+  const [pdfImportOpen, setPdfImportOpen] = useState(false);
+  const [pdfImporting, setPdfImporting] = useState(false);
+  const [pdfImportError, setPdfImportError] = useState("");
+  const [pdfImportPreview, setPdfImportPreview] = useState(null);
+  const pdfImportInputRef = useRef(null);
 
   const sectionForm = useForm({ defaultValues: { title: "", type: "reading_writing", duration: 30, order: 1, adaptiveRole: "STANDARD", routingThreshold: 60 } });
   const examForm = useForm({
@@ -398,12 +403,39 @@ export default function AdminExamsPage({ mode = "admin" }) {
     }
   }
 
+  async function handlePdfImport(event) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    setPdfImportOpen(true);
+    setPdfImportPreview(null);
+    setPdfImportError("");
+    if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
+      setPdfImportError("Choose a valid PDF file.");
+      return;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      setPdfImportError("PDF file must be 15 MB or smaller.");
+      return;
+    }
+
+    setPdfImporting(true);
+    try {
+      setPdfImportPreview(await previewPdfQuestionImport(file));
+    } catch (error) {
+      setPdfImportError(getApiErrorMessage(error, "PDF preview could not be created."));
+    } finally {
+      setPdfImporting(false);
+    }
+  }
+
   if (loading) {
     return <Layout title="Exams" subtitle={subtitle}><Loader label="Loading exams..." /></Layout>;
   }
 
   return (
-    <Layout title="Exams" subtitle={subtitle} actions={<Button onClick={() => setBuilderSignal((value) => value + 1)}><Plus aria-hidden="true" /> Create exam</Button>}>
+    <Layout title="Exams" subtitle={subtitle} actions={<><input ref={pdfImportInputRef} hidden type="file" accept=".pdf,application/pdf" onChange={handlePdfImport} /><Button variant="ghost" onClick={() => pdfImportInputRef.current?.click()}><Upload aria-hidden="true" /> Import PDF</Button><Button onClick={() => setBuilderSignal((value) => value + 1)}><Plus aria-hidden="true" /> Create exam</Button></>}>
       <div className={mode === "teacher" ? "teacher-exam-workspace" : "admin-exam-workspace"}>
         <AdminExamBuilder
           exams={exams}
@@ -479,6 +511,12 @@ export default function AdminExamsPage({ mode = "admin" }) {
           ) : <EmptyState icon={FileQuestion} title="No exams created" message="Create the first MonoPrep or Official exam." actionLabel="Create exam" actionOnClick={() => setBuilderSignal((value) => value + 1)} />}
         </Card>
       </div>
+
+      <Modal open={pdfImportOpen} title="PDF question preview" className="modal-card-wide pdf-import-preview-modal" onClose={() => setPdfImportOpen(false)} actions={<Button variant="ghost" onClick={() => setPdfImportOpen(false)}>Close</Button>}>
+        {pdfImporting ? <Loader label="Reading and analyzing PDF..." /> : null}
+        {!pdfImporting && pdfImportError ? <div className="pdf-import-error"><XCircle aria-hidden="true" /><div><strong>Import preview failed</strong><p>{pdfImportError}</p></div></div> : null}
+        {!pdfImporting && pdfImportPreview ? <PdfImportPreview preview={pdfImportPreview} /> : null}
+      </Modal>
 
       <Modal open={Boolean(viewingExam)} title="Exam details" className="modal-card-wide exam-content-view-modal" onClose={() => setViewingExam(null)} actions={<Button variant="ghost" onClick={() => setViewingExam(null)}>Close</Button>}>
         {viewingExamLoading ? <Loader label="Loading complete exam content..." /> : viewingExam ? (
@@ -641,6 +679,49 @@ export default function AdminExamsPage({ mode = "admin" }) {
 
       <ConfirmActionModal open={Boolean(confirmAction)} title={confirmAction?.title} message={confirmAction?.message} confirmLabel={confirmAction?.confirmLabel} pending={confirmPending} onCancel={() => setConfirmAction(null)} onConfirm={runConfirmAction} />
     </Layout>
+  );
+}
+
+function PdfImportPreview({ preview }) {
+  const statusMeta = {
+    READY: { label: "Ready", icon: CheckCircle2 },
+    NEEDS_REVIEW: { label: "Needs review", icon: AlertTriangle },
+    INVALID: { label: "Invalid", icon: XCircle },
+  };
+
+  return (
+    <div className="pdf-import-preview">
+      <header className="pdf-import-heading">
+        <div><span>{preview.fileName}</span><h3>{preview.examDraft?.title || "Imported exam"}</h3></div>
+        <b>{preview.pageCount} pages</b>
+      </header>
+      <div className="pdf-import-summary" aria-label="PDF import summary">
+        <div><span>Detected</span><strong>{preview.totalDetected}</strong></div>
+        <div className="ready"><span>Ready</span><strong>{preview.ready}</strong></div>
+        <div className="review"><span>Review</span><strong>{preview.needsReview}</strong></div>
+        <div className="invalid"><span>Invalid</span><strong>{preview.invalid}</strong></div>
+      </div>
+      {preview.ocrNeededPages?.length ? <div className="pdf-import-notice"><AlertTriangle aria-hidden="true" /><span>Image-heavy pages: {preview.ocrNeededPages.join(", ")}</span></div> : null}
+      {preview.warnings?.length ? <div className="pdf-import-warnings">{preview.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div> : null}
+      <div className="pdf-import-question-list">
+        {preview.questions?.map((question) => {
+          const meta = statusMeta[question.status] || statusMeta.NEEDS_REVIEW;
+          const StatusIcon = meta.icon;
+          return (
+            <article key={question.temporaryId} className={`pdf-import-question status-${question.status.toLowerCase().replace("_", "-")}`}>
+              <header>
+                <div><span>Page {question.sourcePage || "?"}</span><strong>Question {question.questionNumber || question.temporaryId.replace("draft-question-", "")}</strong></div>
+                <span className="pdf-import-status"><StatusIcon aria-hidden="true" /> {meta.label}</span>
+              </header>
+              <MathJaxContent block>{question.questionText || "Question text could not be reconstructed."}</MathJaxContent>
+              {question.options?.length ? <div className="pdf-import-options">{question.options.map((option) => <p key={`${question.temporaryId}-${option.label}`}><b>{option.label || "?"}</b><span>{option.text || "Missing option text"}</span></p>)}</div> : null}
+              <div className="pdf-import-meta"><span>{question.type?.replaceAll("_", " ") || "Unknown type"}</span><span>{question.skill || "Unclassified"}</span><span>{question.difficulty || "No difficulty"}</span></div>
+              {question.warnings?.length ? <ul>{question.warnings.map((warning) => <li key={warning}>{warning}</li>)}</ul> : null}
+            </article>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

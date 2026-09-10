@@ -45,6 +45,7 @@ function toSafeApiError(error) {
 
 export async function createStructuredOpenAIResponse({
   prompt,
+  input,
   schema,
   schemaName,
   instructions = 'Return a response that matches the supplied JSON schema.',
@@ -58,7 +59,7 @@ export async function createStructuredOpenAIResponse({
     throw new ApiError(503, 'AI service is not configured.');
   }
 
-  if (!prompt || !schema || !schemaName) {
+  if ((!prompt && !input) || !schema || !schemaName) {
     throw new ApiError(500, 'AI service request is not configured correctly.');
   }
 
@@ -67,7 +68,7 @@ export async function createStructuredOpenAIResponse({
       {
         model,
         instructions,
-        input: prompt,
+        input: input || prompt,
         max_output_tokens: maxOutputTokens,
         store: false,
         text: {

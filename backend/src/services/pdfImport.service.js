@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { ApiError } from '../utils/apiError.js';
 import { createStructuredOpenAIResponse } from './openai.service.js';
 import { extractPdfPages } from './pdfExtraction.service.js';
+import { buildPdfVisionChunks } from './pdfVision.service.js';
 
 const QUESTION_TYPES = new Set([
   'single_choice',
@@ -15,6 +16,7 @@ const QUESTION_TYPES = new Set([
 const DIFFICULTIES = new Set(['EASY', 'MEDIUM', 'HARD']);
 const MAX_CHUNK_CHARACTERS = 16_000;
 const MAX_TOTAL_CHARACTERS = 240_000;
+const PDF_VISION_TIMEOUT_MS = 180_000;
 
 const nullableString = { anyOf: [{ type: 'string' }, { type: 'null' }] };
 const nullableNumber = { anyOf: [{ type: 'number' }, { type: 'null' }] };
@@ -214,6 +216,88 @@ export async function parsePdfChunks(chunks, { client, onRequestStart, onUsage }
   return { parsedChunks, usage, requestCount: chunks.length };
 }
 
+function visualChunkPrompt(chunk, index, total) {
+  const pageMap = chunk.pageNumbers
+    .map((pageNumber, pageIndex) => `PDF page ${pageIndex + 1} = original source page ${pageNumber}`)
+    .join(', ');
+  return [
+    `Visually parse scanned exam PDF chunk ${index + 1} of ${total}.`,
+    `Page mapping: ${pageMap}.`,
+    'Read the page images, including passages, tables, formulas, diagrams, question text, and answer choices.',
+    'Use original source page numbers from the mapping for every passage and question.',
+    'Preserve shared passages once and reference them through passageKey.',
+    'Determine the correct answer by solving the question when it is not visibly marked; use null only when it cannot be determined reliably.',
+    'Map question type and difficulty to the allowed enum values when clear; otherwise use null.',
+    'Do not create questions from headers, directions, answer keys, or page furniture.'
+  ].join('\n');
+}
+
+function remapVisualPage(sourcePage, pageNumbers) {
+  const numericPage = Number(sourcePage);
+  if (pageNumbers.includes(numericPage)) return numericPage;
+  if (Number.isInteger(numericPage) && numericPage >= 1 && numericPage <= pageNumbers.length) {
+    return pageNumbers[numericPage - 1];
+  }
+  return numericPage;
+}
+
+export async function parsePdfVisionChunks(chunks, { client, onRequestStart, onUsage } = {}) {
+  const parsedChunks = [];
+  const failedPageNumbers = [];
+  const warnings = [];
+  const usage = { inputTokens: 0, outputTokens: 0, totalTokens: 0 };
+
+  for (let index = 0; index < chunks.length; index += 1) {
+    const chunk = chunks[index];
+    try {
+      onRequestStart?.();
+      const result = await createStructuredOpenAIResponse({
+        operation: 'pdf_import_vision_preview',
+        schemaName: 'monoprep_pdf_import_vision_chunk',
+        schema: pdfImportChunkSchema,
+        instructions: 'You accurately reconstruct SAT-style exam content from scanned PDF pages and return only schema-compliant JSON.',
+        input: [{
+          role: 'user',
+          content: [
+            { type: 'input_text', text: visualChunkPrompt(chunk, index, chunks.length) },
+            {
+              type: 'input_file',
+              filename: `monoprep-pages-${chunk.pageNumbers[0]}-${chunk.pageNumbers.at(-1)}.pdf`,
+              file_data: chunk.fileData
+            }
+          ]
+        }],
+        maxOutputTokens: 16_000,
+        timeoutMs: PDF_VISION_TIMEOUT_MS,
+        client
+      });
+      const parsed = parsedChunkValidator.safeParse(result.data);
+      if (!parsed.success) throw new ApiError(502, 'AI returned an invalid visual import preview.');
+
+      parsedChunks.push({
+        ...parsed.data,
+        passages: parsed.data.passages.map((passage) => ({
+          ...passage,
+          sourcePage: remapVisualPage(passage.sourcePage, chunk.pageNumbers)
+        })),
+        questions: parsed.data.questions.map((question) => ({
+          ...question,
+          sourcePage: remapVisualPage(question.sourcePage, chunk.pageNumbers)
+        }))
+      });
+      usage.inputTokens += result.usage?.inputTokens || 0;
+      usage.outputTokens += result.usage?.outputTokens || 0;
+      usage.totalTokens += result.usage?.totalTokens || 0;
+      onUsage?.(result.usage);
+    } catch (error) {
+      failedPageNumbers.push(...chunk.pageNumbers);
+      warnings.push(`Visual reading failed for pages ${chunk.pageNumbers[0]}-${chunk.pageNumbers.at(-1)}. ${error.message}`);
+    }
+  }
+
+  return { parsedChunks, failedPageNumbers, warnings, usage, requestCount: chunks.length };
+}
+
 function sanitizeOptions(options) {
   if (!Array.isArray(options)) return [];
   return options.map((option) => ({
@@ -407,7 +491,8 @@ export async function createPdfImportPreview({
   fileName,
   requestId,
   client,
-  extract = extractPdfPages
+  extract = extractPdfPages,
+  buildVisionChunks = buildPdfVisionChunks
 }) {
   const startedAt = performance.now();
   let extraction = null;
@@ -416,23 +501,37 @@ export async function createPdfImportPreview({
 
   try {
     extraction = await extract(buffer);
-    const chunks = buildPdfTextChunks(extraction.pages);
-    const parseResult = chunks.length
-      ? await parsePdfChunks(chunks, {
+    const textChunks = buildPdfTextChunks(extraction.pages.filter((page) => !page.ocrNeeded));
+    const textParseResult = textChunks.length
+      ? await parsePdfChunks(textChunks, {
           client,
           onRequestStart() {
             openAiRequestCount += 1;
-          },
-          onUsage(usage) {
-            tokenUsage.inputTokens += usage?.inputTokens || 0;
-            tokenUsage.outputTokens += usage?.outputTokens || 0;
-            tokenUsage.totalTokens += usage?.totalTokens || 0;
           }
         })
-      : { parsedChunks: [], usage: tokenUsage, requestCount: 0 };
-    tokenUsage = parseResult.usage;
+      : {
+          parsedChunks: [],
+          usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 },
+          requestCount: 0
+        };
+    tokenUsage = textParseResult.usage;
 
-    const merged = mergeParsedChunks(parseResult.parsedChunks);
+    const visionChunks = await buildVisionChunks(buffer, extraction.ocrNeededPages);
+    const visionParseResult = visionChunks.length
+      ? await parsePdfVisionChunks(visionChunks, {
+          client,
+          onRequestStart() {
+            openAiRequestCount += 1;
+          }
+        })
+      : { parsedChunks: [], failedPageNumbers: [], warnings: [], usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } };
+    tokenUsage = {
+      inputTokens: (textParseResult.usage?.inputTokens || 0) + (visionParseResult.usage?.inputTokens || 0),
+      outputTokens: (textParseResult.usage?.outputTokens || 0) + (visionParseResult.usage?.outputTokens || 0),
+      totalTokens: (textParseResult.usage?.totalTokens || 0) + (visionParseResult.usage?.totalTokens || 0)
+    };
+
+    const merged = mergeParsedChunks([...textParseResult.parsedChunks, ...visionParseResult.parsedChunks]);
     const passageIds = new Set(merged.passages.map((passage) => passage.temporaryId));
     const questions = validateDraftQuestions(merged.questions, {
       pageCount: extraction.pageCount,
@@ -447,9 +546,13 @@ export async function createPdfImportPreview({
       ready: count('READY'),
       needsReview: count('NEEDS_REVIEW'),
       invalid: count('INVALID'),
-      ocrNeededPages: extraction.ocrNeededPages,
+      ocrNeededPages: visionParseResult.failedPageNumbers,
+      visionProcessedPages: extraction.ocrNeededPages.filter(
+        (pageNumber) => !visionParseResult.failedPageNumbers.includes(pageNumber)
+      ),
       warnings: [
         ...merged.warnings,
+        ...visionParseResult.warnings,
         ...(extraction.extractedCharacterCount > MAX_TOTAL_CHARACTERS
           ? [`Only the first ${MAX_TOTAL_CHARACTERS} extracted characters were parsed.`]
           : [])

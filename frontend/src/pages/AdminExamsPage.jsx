@@ -701,7 +701,8 @@ function PdfImportPreview({ preview }) {
         <div className="review"><span>Review</span><strong>{preview.needsReview}</strong></div>
         <div className="invalid"><span>Invalid</span><strong>{preview.invalid}</strong></div>
       </div>
-      {preview.ocrNeededPages?.length ? <div className="pdf-import-notice"><AlertTriangle aria-hidden="true" /><span>Image-heavy pages: {preview.ocrNeededPages.join(", ")}</span></div> : null}
+      {preview.visionProcessedPages?.length ? <div className="pdf-import-notice success"><CheckCircle2 aria-hidden="true" /><span>Vision OCR processed {preview.visionProcessedPages.length} scanned page{preview.visionProcessedPages.length === 1 ? "" : "s"}.</span></div> : null}
+      {preview.ocrNeededPages?.length ? <div className="pdf-import-notice"><AlertTriangle aria-hidden="true" /><span>Pages that still need review: {preview.ocrNeededPages.join(", ")}</span></div> : null}
       {preview.warnings?.length ? <div className="pdf-import-warnings">{preview.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div> : null}
       <div className="pdf-import-question-list">
         {preview.questions?.map((question) => {

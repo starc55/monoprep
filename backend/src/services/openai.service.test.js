@@ -93,6 +93,38 @@ test('returns a safe timeout error', async () => {
   }
 });
 
+test('accepts multimodal file input without requiring a text prompt', async () => {
+  let receivedInput;
+  const client = {
+    responses: {
+      async create(params) {
+        receivedInput = params.input;
+        return {
+          output_text: '{"status":"ok"}',
+          model: 'test-model'
+        };
+      }
+    }
+  };
+
+  const input = [{
+    role: 'user',
+    content: [
+      { type: 'input_text', text: 'Read this PDF.' },
+      { type: 'input_file', filename: 'exam.pdf', file_data: 'data:application/pdf;base64,JVBERi0=' }
+    ]
+  }];
+  const result = await createStructuredOpenAIResponse({
+    input,
+    schema,
+    schemaName: 'file_test',
+    client
+  });
+
+  assert.deepEqual(receivedInput, input);
+  assert.deepEqual(result.data, { status: 'ok' });
+});
+
 test('rejects use when no API client is configured', async () => {
   await assert.rejects(
     createStructuredOpenAIResponse({

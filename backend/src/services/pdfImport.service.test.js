@@ -239,6 +239,55 @@ test('builds a memory-only preview with counts and temporary IDs', async () => {
   }
 });
 
+test('uses OpenAI vision fallback for scanned PDF pages', async () => {
+  let receivedInput;
+  const client = {
+    responses: {
+      async create(params) {
+        receivedInput = params.input;
+        return {
+          id: 'response-vision-1',
+          model: 'test-model',
+          output_text: JSON.stringify({
+            examTitle: 'Scanned Practice Test',
+            passages: [],
+            questions: [validQuestion({ sourcePage: 1 })],
+            warnings: []
+          }),
+          usage: { input_tokens: 100, output_tokens: 40, total_tokens: 140 }
+        };
+      }
+    }
+  };
+  const originalInfo = console.info;
+  console.info = () => {};
+  try {
+    const preview = await createPdfImportPreview({
+      buffer: Buffer.from('scanned-pdf'),
+      fileName: 'scan.pdf',
+      requestId: 'vision-test',
+      client,
+      extract: async () => ({
+        pageCount: 1,
+        pages: [{ pageNumber: 1, text: '', ocrNeeded: true }],
+        extractedCharacterCount: 0,
+        ocrNeededPages: [1]
+      }),
+      buildVisionChunks: async () => [{
+        pageNumbers: [1],
+        fileData: 'data:application/pdf;base64,JVBERi0='
+      }]
+    });
+
+    assert.equal(receivedInput[0].content[1].type, 'input_file');
+    assert.equal(preview.totalDetected, 1);
+    assert.deepEqual(preview.visionProcessedPages, [1]);
+    assert.deepEqual(preview.ocrNeededPages, []);
+  } finally {
+    console.info = originalInfo;
+  }
+});
+
 test('requires authentication before PDF import', async () => {
   const result = await middlewareResult(requireAuth, { headers: {} });
 

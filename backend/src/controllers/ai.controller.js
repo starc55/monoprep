@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { generateFeedbackForAttempt, getFeedbackForAttempt } from '../services/ai.service.js';
 import { createStructuredOpenAIResponse } from '../services/openai.service.js';
 import { createPdfImportPreview } from '../services/pdfImport.service.js';
+import { commitPdfImport } from '../services/pdfImportCommit.service.js';
 
 const openAiTestSchema = {
   type: 'object',
@@ -51,4 +52,9 @@ export async function previewPdfImport(req, res) {
   });
   res.set('x-request-id', requestId);
   res.json(preview);
+}
+
+export async function commitPdfImportDraft(req, res) {
+  const result = await commitPdfImport(req.body);
+  res.status(201).json(result);
 }

@@ -204,6 +204,49 @@ export const questionBankItemSchema = z.object({
 
 export const questionBankItemUpdateSchema = questionBankItemSchema.partial();
 
+const pdfDraftQuestionSchema = z.object({
+  temporaryId: z.string().min(1).max(120),
+  status: z.enum(['READY', 'NEEDS_REVIEW', 'INVALID']),
+  questionText: z.string().max(50000).nullable().optional(),
+  type: z.string().max(40).nullable().optional(),
+  skill: z.string().max(160).nullable().optional(),
+  difficulty: z.string().max(20).nullable().optional(),
+  sectionTitle: z.string().max(240).nullable().optional(),
+  sectionType: z.string().max(40).nullable().optional(),
+  moduleTitle: z.string().max(240).nullable().optional(),
+  passageTempId: z.string().max(120).nullable().optional(),
+  options: z.array(z.object({
+    label: z.string().max(5).nullable().optional(),
+    text: z.string().max(20000).nullable().optional()
+  })).max(8).optional(),
+  correctAnswer: z.union([z.string(), z.array(z.string()), z.null()]).optional(),
+  explanation: z.string().max(20000).nullable().optional(),
+  instructions: z.string().max(2000).nullable().optional(),
+  formulaText: z.string().max(5000).nullable().optional(),
+  calculatorAllowed: z.boolean().nullable().optional(),
+  sourcePage: z.number().int().positive().nullable().optional()
+}).passthrough();
+
+export const pdfImportCommitSchema = z.object({
+  setup: z.object({
+    title: z.string().min(3).max(240),
+    description: z.string().min(10).max(2000),
+    type: z.enum(['FULL_LENGTH', 'PRACTICE', 'CUSTOM']),
+    accessType: z.enum(['FREE', 'PAID']),
+    source: z.enum(['MONOPREP', 'OFFICIAL']),
+    totalDuration: z.number().int().positive().max(600)
+  }),
+  draft: z.object({
+    passages: z.array(z.object({
+      temporaryId: z.string().min(1).max(120),
+      title: z.string().max(240).nullable().optional(),
+      content: z.string().max(100000),
+      sourcePage: z.number().int().positive().nullable().optional()
+    }).passthrough()).max(250),
+    questions: z.array(pdfDraftQuestionSchema).min(1).max(300)
+  })
+});
+
 export const questionHubProgressSchema = z.object({
   questionKey: z.string().min(1).max(240),
   answer: z.any().nullable().optional(),

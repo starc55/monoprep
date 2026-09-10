@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, ChevronDown, Eye, FileQuestion, FileText, Pencil, Plus, Trash2, Upload, X, XCircle } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, ChevronDown, Eye, FileQuestion, FileText, Pencil, Plus, Trash2, Upload, X, XCircle } from "lucide-react";
 import { useForm } from "react-hook-form";
 import AdminLayout from "../layouts/AdminLayout.jsx";
 import TeacherLayout from "../layouts/TeacherLayout.jsx";
@@ -28,7 +28,7 @@ import "../styles/pages/teacher-exams.css";
 import {
   createExam, createPassage, createQuestion, createSection, deleteExam, deleteQuestion,
   deleteSection, getExam, getExams, getPassages, updateExam, updateQuestion,
-  updatePassage, updateSection, uploadPassageFile, uploadQuestionImage, previewPdfQuestionImport,
+  updatePassage, updateSection, uploadPassageFile, uploadQuestionImage, previewPdfQuestionImport, commitPdfQuestionImport,
 } from "../services/examService.js";
 import { createQuestionBankItem } from "../services/questionBankService.js";
 
@@ -112,6 +112,13 @@ export default function AdminExamsPage({ mode = "admin" }) {
   const [pdfImporting, setPdfImporting] = useState(false);
   const [pdfImportError, setPdfImportError] = useState("");
   const [pdfImportPreview, setPdfImportPreview] = useState(null);
+  const [pdfImportStep, setPdfImportStep] = useState("review");
+  const [pdfImportSelected, setPdfImportSelected] = useState([]);
+  const [pdfImportSetup, setPdfImportSetup] = useState({
+    title: "", description: "", type: "FULL_LENGTH", accessType: "FREE", source: "OFFICIAL", totalDuration: 134,
+  });
+  const [pdfImportSaving, setPdfImportSaving] = useState(false);
+  const [pdfImportResult, setPdfImportResult] = useState(null);
   const pdfImportInputRef = useRef(null);
 
   const sectionForm = useForm({ defaultValues: { title: "", type: "reading_writing", duration: 30, order: 1, adaptiveRole: "STANDARD", routingThreshold: 60 } });
@@ -411,6 +418,9 @@ export default function AdminExamsPage({ mode = "admin" }) {
     setPdfImportOpen(true);
     setPdfImportPreview(null);
     setPdfImportError("");
+    setPdfImportStep("review");
+    setPdfImportSelected([]);
+    setPdfImportResult(null);
     if (file.type !== "application/pdf" || !file.name.toLowerCase().endsWith(".pdf")) {
       setPdfImportError("Choose a valid PDF file.");
       return;
@@ -422,12 +432,79 @@ export default function AdminExamsPage({ mode = "admin" }) {
 
     setPdfImporting(true);
     try {
-      setPdfImportPreview(await previewPdfQuestionImport(file));
+      const preview = await previewPdfQuestionImport(file);
+      setPdfImportPreview(preview);
+      setPdfImportSelected(preview.questions.filter((question) => question.status === "READY").map((question) => question.temporaryId));
+      const title = preview.examDraft?.title || file.name.replace(/\.pdf$/i, "").trim();
+      setPdfImportSetup({
+        title,
+        description: `${title} imported from PDF for review and publishing.`,
+        type: "FULL_LENGTH",
+        accessType: "FREE",
+        source: "OFFICIAL",
+        totalDuration: 134,
+      });
     } catch (error) {
       setPdfImportError(getApiErrorMessage(error, "PDF preview could not be created."));
     } finally {
       setPdfImporting(false);
     }
+  }
+
+  function togglePdfImportQuestion(temporaryId) {
+    setPdfImportSelected((current) => current.includes(temporaryId)
+      ? current.filter((id) => id !== temporaryId)
+      : [...current, temporaryId]);
+  }
+
+  function selectPdfImportQuestions(mode) {
+    const allowedStatuses = mode === "ready" ? ["READY"] : ["READY", "NEEDS_REVIEW"];
+    setPdfImportSelected(
+      (pdfImportPreview?.questions || [])
+        .filter((question) => allowedStatuses.includes(question.status))
+        .map((question) => question.temporaryId)
+    );
+  }
+
+  async function handlePdfImportCommit() {
+    const title = pdfImportSetup.title.trim();
+    const description = pdfImportSetup.description.trim();
+    if (title.length < 3 || description.length < 10) {
+      setPdfImportError("Add an exam title and a clear description before importing.");
+      return;
+    }
+    if (!pdfImportSelected.length) {
+      setPdfImportError("Select at least one valid question to import.");
+      setPdfImportStep("review");
+      return;
+    }
+
+    setPdfImportSaving(true);
+    setPdfImportError("");
+    try {
+      const result = await commitPdfQuestionImport({
+        setup: { ...pdfImportSetup, title, description, totalDuration: Number(pdfImportSetup.totalDuration) },
+        draft: {
+          passages: pdfImportPreview.examDraft?.passages || [],
+          questions: pdfImportPreview.questions.filter((question) => pdfImportSelected.includes(question.temporaryId)),
+        },
+      });
+      setPdfImportResult(result);
+      setPdfImportStep("complete");
+      await load();
+    } catch (error) {
+      setPdfImportError(getApiErrorMessage(error, "The PDF questions could not be imported."));
+    } finally {
+      setPdfImportSaving(false);
+    }
+  }
+
+  function openImportedExam() {
+    const exam = pdfImportResult?.exam;
+    if (!exam) return;
+    setPdfImportOpen(false);
+    setExpandedExamId(exam.id);
+    setExamDetails((current) => ({ ...current, [exam.id]: exam }));
   }
 
   if (loading) {
@@ -512,10 +589,17 @@ export default function AdminExamsPage({ mode = "admin" }) {
         </Card>
       </div>
 
-      <Modal open={pdfImportOpen} title="PDF question preview" className="modal-card-wide pdf-import-preview-modal" onClose={() => setPdfImportOpen(false)} actions={<Button variant="ghost" onClick={() => setPdfImportOpen(false)}>Close</Button>}>
+      <Modal open={pdfImportOpen} title="Import exam from PDF" className="modal-card-wide pdf-import-preview-modal" onClose={() => !pdfImportSaving && setPdfImportOpen(false)} actions={<>
+        {pdfImportStep === "setup" ? <Button variant="ghost" disabled={pdfImportSaving} onClick={() => setPdfImportStep("review")}><ArrowLeft aria-hidden="true" /> Review</Button> : <Button variant="ghost" disabled={pdfImportSaving} onClick={() => setPdfImportOpen(false)}>Close</Button>}
+        {!pdfImporting && pdfImportPreview && pdfImportStep === "review" ? <Button disabled={!pdfImportSelected.length} onClick={() => { setPdfImportError(""); setPdfImportStep("setup"); }}>Continue with {pdfImportSelected.length}</Button> : null}
+        {pdfImportStep === "setup" ? <Button disabled={pdfImportSaving} onClick={handlePdfImportCommit}>{pdfImportSaving ? "Importing..." : "Create draft exam"}</Button> : null}
+        {pdfImportStep === "complete" ? <Button onClick={openImportedExam}>Open imported exam</Button> : null}
+      </>}>
         {pdfImporting ? <Loader label="Reading and analyzing PDF..." /> : null}
-        {!pdfImporting && pdfImportError ? <div className="pdf-import-error"><XCircle aria-hidden="true" /><div><strong>Import preview failed</strong><p>{pdfImportError}</p></div></div> : null}
-        {!pdfImporting && pdfImportPreview ? <PdfImportPreview preview={pdfImportPreview} /> : null}
+        {!pdfImporting && pdfImportError ? <div className="pdf-import-error"><XCircle aria-hidden="true" /><div><strong>PDF import needs attention</strong><p>{pdfImportError}</p></div></div> : null}
+        {!pdfImporting && pdfImportPreview && pdfImportStep === "review" ? <PdfImportPreview preview={pdfImportPreview} selected={pdfImportSelected} onToggle={togglePdfImportQuestion} onSelectMode={selectPdfImportQuestions} /> : null}
+        {!pdfImporting && pdfImportPreview && pdfImportStep === "setup" ? <PdfImportSetup setup={pdfImportSetup} onChange={setPdfImportSetup} selectedCount={pdfImportSelected.length} passageCount={pdfImportPreview.examDraft?.passages?.length || 0} /> : null}
+        {pdfImportStep === "complete" && pdfImportResult ? <PdfImportComplete result={pdfImportResult} /> : null}
       </Modal>
 
       <Modal open={Boolean(viewingExam)} title="Exam details" className="modal-card-wide exam-content-view-modal" onClose={() => setViewingExam(null)} actions={<Button variant="ghost" onClick={() => setViewingExam(null)}>Close</Button>}>
@@ -682,7 +766,7 @@ export default function AdminExamsPage({ mode = "admin" }) {
   );
 }
 
-function PdfImportPreview({ preview }) {
+function PdfImportPreview({ preview, selected, onToggle, onSelectMode }) {
   const statusMeta = {
     READY: { label: "Ready", icon: CheckCircle2 },
     NEEDS_REVIEW: { label: "Needs review", icon: AlertTriangle },
@@ -704,14 +788,19 @@ function PdfImportPreview({ preview }) {
       {preview.visionProcessedPages?.length ? <div className="pdf-import-notice success"><CheckCircle2 aria-hidden="true" /><span>Vision OCR processed {preview.visionProcessedPages.length} scanned page{preview.visionProcessedPages.length === 1 ? "" : "s"}.</span></div> : null}
       {preview.ocrNeededPages?.length ? <div className="pdf-import-notice"><AlertTriangle aria-hidden="true" /><span>Pages that still need review: {preview.ocrNeededPages.join(", ")}</span></div> : null}
       {preview.warnings?.length ? <div className="pdf-import-warnings">{preview.warnings.map((warning) => <p key={warning}>{warning}</p>)}</div> : null}
+      {preview.examDraft?.passages?.length ? <section className="pdf-import-passages"><header><strong>Detected passages</strong><span>{preview.examDraft.passages.length} linked passage{preview.examDraft.passages.length === 1 ? "" : "s"}</span></header>{preview.examDraft.passages.map((passage) => <div key={passage.temporaryId}><b>{passage.title || `Passage from page ${passage.sourcePage}`}</b><p>{stripRichTextMarkup(passage.content).slice(0, 220)}{passage.content.length > 220 ? "..." : ""}</p></div>)}</section> : null}
+      <div className="pdf-import-selection-bar">
+        <span><strong>{selected.length}</strong> questions selected</span>
+        <div><button type="button" onClick={() => onSelectMode("ready")}>Ready only</button><button type="button" onClick={() => onSelectMode("usable")}>Select all usable</button></div>
+      </div>
       <div className="pdf-import-question-list">
         {preview.questions?.map((question) => {
           const meta = statusMeta[question.status] || statusMeta.NEEDS_REVIEW;
           const StatusIcon = meta.icon;
           return (
-            <article key={question.temporaryId} className={`pdf-import-question status-${question.status.toLowerCase().replace("_", "-")}`}>
+            <article key={question.temporaryId} className={`pdf-import-question status-${question.status.toLowerCase().replace("_", "-")} ${selected.includes(question.temporaryId) ? "selected" : ""}`}>
               <header>
-                <div><span>Page {question.sourcePage || "?"}</span><strong>Question {question.questionNumber || question.temporaryId.replace("draft-question-", "")}</strong></div>
+                <div><label className="pdf-import-select"><input type="checkbox" checked={selected.includes(question.temporaryId)} disabled={question.status === "INVALID"} onChange={() => onToggle(question.temporaryId)} /><span>Page {question.sourcePage || "?"}</span></label><strong>Question {question.questionNumber || question.temporaryId.replace("draft-question-", "")}</strong></div>
                 <span className="pdf-import-status"><StatusIcon aria-hidden="true" /> {meta.label}</span>
               </header>
               <MathJaxContent block>{question.questionText || "Question text could not be reconstructed."}</MathJaxContent>
@@ -722,6 +811,37 @@ function PdfImportPreview({ preview }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function PdfImportSetup({ setup, onChange, selectedCount, passageCount }) {
+  const setField = (field, value) => onChange((current) => ({ ...current, [field]: value }));
+  return (
+    <div className="pdf-import-setup">
+      <div className="pdf-import-stage-summary"><div><span>Questions</span><strong>{selectedCount}</strong></div><div><span>Passages</span><strong>{passageCount}</strong></div><div><span>Status</span><strong>Draft</strong></div></div>
+      <p className="builder-default-note">The exam, modules, linked passages, questions, and answer choices will be created together. Review the draft before publishing.</p>
+      <label className="form-field"><span>Exam title</span><input value={setup.title} onChange={(event) => setField("title", event.target.value)} /></label>
+      <label className="form-field"><span>Description</span><textarea value={setup.description} onChange={(event) => setField("description", event.target.value)} /></label>
+      <div className="builder-field-row">
+        <div className="form-field"><span>Exam type</span><PremiumSelect ariaLabel="Imported exam type" value={setup.type} onChange={(value) => setField("type", value)} options={[{ value: "FULL_LENGTH", label: "Full Length SAT" }, { value: "PRACTICE", label: "Practice Exam" }, { value: "CUSTOM", label: "Custom Practice" }]} /></div>
+        <label className="form-field"><span>Total minutes</span><input type="number" min="1" max="600" value={setup.totalDuration} onChange={(event) => setField("totalDuration", event.target.value)} /></label>
+      </div>
+      <div className="builder-field-row">
+        <div className="form-field"><span>Source</span><PremiumSelect ariaLabel="Imported exam source" value={setup.source} onChange={(value) => setField("source", value)} options={sourceOptions} /></div>
+        <div className="form-field"><span>Access</span><PremiumSelect ariaLabel="Imported exam access" value={setup.accessType} onChange={(value) => setField("accessType", value)} options={[{ value: "FREE", label: "Free" }, { value: "PAID", label: "Premium" }]} /></div>
+      </div>
+    </div>
+  );
+}
+
+function PdfImportComplete({ result }) {
+  return (
+    <div className="pdf-import-complete">
+      <CheckCircle2 aria-hidden="true" />
+      <h3>Draft exam created</h3>
+      <p>{result.importedQuestions} questions and {result.importedPassages} passages were imported into <strong>{result.exam.title}</strong>.</p>
+      {result.skipped?.length ? <p>{result.skipped.length} incomplete question{result.skipped.length === 1 ? " was" : "s were"} skipped safely.</p> : null}
     </div>
   );
 }

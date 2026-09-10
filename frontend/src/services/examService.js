@@ -88,6 +88,13 @@ export async function previewPdfQuestionImport(file) {
   return data;
 }
 
+export async function commitPdfQuestionImport(payload) {
+  const { data } = await api.post('/ai/pdf-import/commit', payload, {
+    timeout: 120000
+  });
+  return data;
+}
+
 export async function uploadTeacherImage(file) {
   const body = new FormData();
   body.append('image', file);

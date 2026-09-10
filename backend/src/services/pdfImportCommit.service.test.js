@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildPdfImportPlan } from './pdfImportCommit.service.js';
+import { buildPdfImportPlan, commitPdfImport } from './pdfImportCommit.service.js';
 
 function payload() {
   return {
@@ -48,7 +48,44 @@ test('builds an atomic import plan with modules, passages, and answer choices', 
   assert.equal(plan.modules.length, 1);
   assert.equal(plan.passages.length, 1);
   assert.equal(plan.modules[0].questions[0].passageTempId, 'passage-1');
+  assert.equal(plan.modules[0].questions[0].acceptedAnswers, undefined);
   assert.deepEqual(plan.modules[0].questions[0].options.map((option) => option.isCorrect), [false, true]);
+});
+
+test('normalizes duplicate answer labels before the database transaction', () => {
+  const input = payload();
+  input.draft.questions[0].options = [
+    { label: 'B', text: 'First choice' },
+    { label: 'B', text: 'Second choice' },
+    { label: '', text: 'Third choice' }
+  ];
+
+  const plan = buildPdfImportPlan(input);
+  assert.deepEqual(plan.modules[0].questions[0].options.map((option) => option.label), ['B', 'A', 'C']);
+});
+
+test('uses an import-sized timeout for the atomic database transaction', async () => {
+  let transactionOptions;
+  const transaction = {
+    exam: {
+      create: async () => ({ id: 'exam-1' }),
+      findUnique: async () => ({ id: 'exam-1', title: 'Imported SAT Practice' })
+    },
+    passage: { create: async () => ({ id: 'passage-db-1' }) },
+    section: { create: async () => ({ id: 'section-1' }) },
+    question: { create: async () => ({ id: 'question-1' }) }
+  };
+  const db = {
+    $transaction: async (callback, options) => {
+      transactionOptions = options;
+      return callback(transaction);
+    }
+  };
+
+  const result = await commitPdfImport(payload(), db);
+
+  assert.equal(result.importedQuestions, 1);
+  assert.deepEqual(transactionOptions, { maxWait: 15000, timeout: 180000 });
 });
 
 test('skips an ungradable student-produced response', () => {

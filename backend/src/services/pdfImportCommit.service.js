@@ -24,14 +24,29 @@ function acceptedAnswers(question) {
 }
 
 function normalizedOptions(question) {
-  return (question.options || [])
-    .map((option, index) => ({
-      label: clean(option.label).toUpperCase() || String.fromCharCode(65 + index),
-      text: clean(option.text),
-      imageUrl: null,
-      order: index + 1
-    }))
-    .filter((option) => option.text);
+  const usedLabels = new Set();
+  const nextAvailableLabel = () => {
+    for (let code = 65; code <= 72; code += 1) {
+      const candidate = String.fromCharCode(code);
+      if (!usedLabels.has(candidate)) return candidate;
+    }
+    return null;
+  };
+
+  return (question.options || []).reduce((rows, option) => {
+    const text = clean(option.text);
+    if (!text) return rows;
+
+    const requestedLabel = clean(option.label).toUpperCase();
+    const label = /^[A-H]$/.test(requestedLabel) && !usedLabels.has(requestedLabel)
+      ? requestedLabel
+      : nextAvailableLabel();
+    if (!label) return rows;
+
+    usedLabels.add(label);
+    rows.push({ label, text, imageUrl: null, order: rows.length + 1 });
+    return rows;
+  }, []);
 }
 
 export function buildPdfImportPlan({ setup, draft }) {
@@ -83,7 +98,7 @@ export function buildPdfImportPlan({ setup, draft }) {
       instructions: clean(question.instructions) || null,
       formulaText: type === 'math' ? clean(question.formulaText) || null : null,
       calculatorAllowed: type === 'math' && question.calculatorAllowed !== false,
-      acceptedAnswers: usesOptions ? null : answers,
+      acceptedAnswers: usesOptions ? undefined : answers,
       correctAnswer: usesOptions ? { value: correctLabels[0] || null } : { acceptedAnswers: answers },
       explanation: clean(question.explanation) || 'Imported from PDF. Review and add a worked explanation.',
       options: usesOptions
@@ -135,66 +150,79 @@ export function buildPdfImportPlan({ setup, draft }) {
 
 export async function commitPdfImport(payload, db = prisma) {
   const plan = buildPdfImportPlan(payload);
-  return db.$transaction(async (transaction) => {
-    const exam = await transaction.exam.create({ data: plan.exam });
-    const passageIdMap = new Map();
+  try {
+    return await db.$transaction(async (transaction) => {
+      const exam = await transaction.exam.create({ data: plan.exam });
+      const passageIdMap = new Map();
 
-    for (const passage of plan.passages) {
-      const created = await transaction.passage.create({
-        data: { title: passage.title, content: passage.content, category: passage.category }
-      });
-      passageIdMap.set(passage.temporaryId, created.id);
-    }
+      for (const passage of plan.passages) {
+        const created = await transaction.passage.create({
+          data: { title: passage.title, content: passage.content, category: passage.category }
+        });
+        passageIdMap.set(passage.temporaryId, created.id);
+      }
 
-    let importedQuestions = 0;
-    for (let moduleIndex = 0; moduleIndex < plan.modules.length; moduleIndex += 1) {
-      const module = plan.modules[moduleIndex];
-      const sameTypeIndex = plan.modules.slice(0, moduleIndex).filter((item) => item.type === module.type).length;
-      const section = await transaction.section.create({
-        data: {
-          examId: exam.id,
-          title: module.title,
-          type: module.type,
-          duration: module.type === 'math' ? 35 : 32,
-          order: moduleIndex + 1,
-          adaptiveRole: sameTypeIndex === 0 ? 'MODULE_1' : 'STANDARD',
-          routingThreshold: 60
-        }
-      });
-
-      for (let questionIndex = 0; questionIndex < module.questions.length; questionIndex += 1) {
-        const question = module.questions[questionIndex];
-        await transaction.question.create({
+      let importedQuestions = 0;
+      for (let moduleIndex = 0; moduleIndex < plan.modules.length; moduleIndex += 1) {
+        const module = plan.modules[moduleIndex];
+        const sameTypeIndex = plan.modules.slice(0, moduleIndex).filter((item) => item.type === module.type).length;
+        const section = await transaction.section.create({
           data: {
-            sectionId: section.id,
-            passageId: passageIdMap.get(question.passageTempId) || null,
-            type: question.type,
-            skill: question.skill,
-            difficulty: question.difficulty,
-            questionText: question.questionText,
-            instructions: question.instructions,
-            formulaText: question.formulaText,
-            calculatorAllowed: question.calculatorAllowed,
-            acceptedAnswers: question.acceptedAnswers,
-            correctAnswer: question.correctAnswer,
-            explanation: question.explanation,
-            order: questionIndex + 1,
-            options: question.options.length ? { create: question.options } : undefined
+            examId: exam.id,
+            title: module.title,
+            type: module.type,
+            duration: module.type === 'math' ? 35 : 32,
+            order: moduleIndex + 1,
+            adaptiveRole: sameTypeIndex === 0 ? 'MODULE_1' : 'STANDARD',
+            routingThreshold: 60
           }
         });
-        importedQuestions += 1;
-      }
-    }
 
-    const savedExam = await transaction.exam.findUnique({
-      where: { id: exam.id },
-      include: examDeepInclude
+        for (let questionIndex = 0; questionIndex < module.questions.length; questionIndex += 1) {
+          const question = module.questions[questionIndex];
+          await transaction.question.create({
+            data: {
+              sectionId: section.id,
+              passageId: passageIdMap.get(question.passageTempId) || null,
+              type: question.type,
+              skill: question.skill,
+              difficulty: question.difficulty,
+              questionText: question.questionText,
+              instructions: question.instructions,
+              formulaText: question.formulaText,
+              calculatorAllowed: question.calculatorAllowed,
+              acceptedAnswers: question.acceptedAnswers,
+              correctAnswer: question.correctAnswer,
+              explanation: question.explanation,
+              order: questionIndex + 1,
+              options: question.options.length ? { create: question.options } : undefined
+            }
+          });
+          importedQuestions += 1;
+        }
+      }
+
+      const savedExam = await transaction.exam.findUnique({
+        where: { id: exam.id },
+        include: examDeepInclude
+      });
+      return {
+        exam: savedExam,
+        importedQuestions,
+        importedPassages: passageIdMap.size,
+        skipped: plan.skipped
+      };
+    }, {
+      maxWait: 15000,
+      timeout: 180000
     });
-    return {
-      exam: savedExam,
-      importedQuestions,
-      importedPassages: passageIdMap.size,
-      skipped: plan.skipped
-    };
-  });
+  } catch (error) {
+    if (error?.code === 'P2028') {
+      throw new ApiError(503, 'The PDF import took too long. Please try again; no partial exam was saved.');
+    }
+    if (error?.code === 'P2002') {
+      throw new ApiError(400, 'The PDF contains duplicate answer labels. Review the detected questions and try again.');
+    }
+    throw error;
+  }
 }

@@ -90,7 +90,7 @@ export async function previewPdfQuestionImport(file) {
 
 export async function commitPdfQuestionImport(payload) {
   const { data } = await api.post('/ai/pdf-import/commit', payload, {
-    timeout: 120000
+    timeout: 210000
   });
   return data;
 }

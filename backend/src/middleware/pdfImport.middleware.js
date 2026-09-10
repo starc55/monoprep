@@ -3,7 +3,7 @@ import { fileTypeFromBuffer } from 'file-type';
 import multer from 'multer';
 import { ApiError } from '../utils/apiError.js';
 
-export const PDF_IMPORT_MAX_BYTES = 15 * 1024 * 1024;
+export const PDF_IMPORT_MAX_BYTES = 20 * 1024 * 1024;
 
 const pdfUpload = multer({
   storage: multer.memoryStorage(),
@@ -37,7 +37,7 @@ export async function validatePdfUploadFile(file) {
     throw new ApiError(400, 'Choose a PDF file to upload.');
   }
   if (file.size > PDF_IMPORT_MAX_BYTES) {
-    throw new ApiError(400, 'PDF file must be 15 MB or smaller.');
+    throw new ApiError(400, 'PDF file must be 20 MB or smaller.');
   }
   if (file.mimetype !== 'application/pdf') {
     throw new ApiError(400, 'Only PDF files can be uploaded.');
@@ -57,7 +57,7 @@ export async function validatePdfUploadFile(file) {
 function toUploadError(error) {
   if (error instanceof ApiError) return error;
   if (error?.code === 'LIMIT_FILE_SIZE') {
-    return new ApiError(400, 'PDF file must be 15 MB or smaller.');
+    return new ApiError(400, 'PDF file must be 20 MB or smaller.');
   }
   if (error?.code?.startsWith('LIMIT_')) {
     return new ApiError(400, 'Upload exactly one PDF using the "file" field.');

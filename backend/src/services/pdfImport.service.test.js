@@ -119,7 +119,7 @@ test('rejects invalid PDF MIME, extension, and oversized uploads', async () => {
   );
   await assert.rejects(
     validatePdfUploadFile(uploadFile(pdf, { size: PDF_IMPORT_MAX_BYTES + 1 })),
-    /15 MB or smaller/
+    /20 MB or smaller/
   );
 });
 

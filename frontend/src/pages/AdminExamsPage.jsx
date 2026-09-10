@@ -415,8 +415,8 @@ export default function AdminExamsPage({ mode = "admin" }) {
       setPdfImportError("Choose a valid PDF file.");
       return;
     }
-    if (file.size > 15 * 1024 * 1024) {
-      setPdfImportError("PDF file must be 15 MB or smaller.");
+    if (file.size > 20 * 1024 * 1024) {
+      setPdfImportError("PDF file must be 20 MB or smaller.");
       return;
     }
 

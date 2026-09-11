@@ -1,4 +1,5 @@
 import AnimatedDropdown from "../motion/AnimatedDropdown.jsx";
+import { hasAnswer } from "../../utils/exam.js";
 
 export default function QuestionPalette({
   open = true,
@@ -25,9 +26,7 @@ export default function QuestionPalette({
       </div>
       <div className="palette-grid">
         {questions.map((question, index) => {
-          const isAnswered = Boolean(
-            answers[question.id]?.value || answers[question.id]?.values?.length
-          );
+          const isAnswered = hasAnswer(answers[question.id]);
           const isReview = Boolean(reviewFlags[question.id]);
           const isActive = currentQuestionId === question.id;
 

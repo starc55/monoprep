@@ -8,9 +8,26 @@ import {
 import { extractPdfPages } from './pdfExtraction.service.js';
 import {
   createPdfImportPreview,
+  normalizeSatModuleAssignments,
   parsePdfChunks,
   validateDraftQuestions
 } from './pdfImport.service.js';
+
+test('normalizes global SAT module numbering into four canonical modules', () => {
+  const normalized = normalizeSatModuleAssignments([
+    validQuestion({ sectionType: 'reading_writing', sectionTitle: 'English', moduleTitle: 'Module 1' }),
+    validQuestion({ sectionType: 'reading_writing', sectionTitle: 'English', moduleTitle: 'Module 2' }),
+    validQuestion({ sectionType: 'math', sectionTitle: 'Math', moduleTitle: 'Module 3' }),
+    validQuestion({ sectionType: 'math', sectionTitle: 'Math', moduleTitle: 'Module 4' })
+  ]);
+
+  assert.deepEqual(normalized.map((question) => question.moduleTitle), [
+    'Reading and Writing Module 1',
+    'Reading and Writing Module 2',
+    'Math Module 1',
+    'Math Module 2'
+  ]);
+});
 
 function createTextPdf(text) {
   const escapedText = text.replace(/([\\()])/g, '\\$1');

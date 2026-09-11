@@ -67,9 +67,15 @@ export default function QuestionRenderer({
           </button>
         )}
         {!preview && question.type !== "text_input" && question.options?.length ? (
-          <button type="button" className={`answer-elimination-toggle ${eliminateMode ? "active" : ""}`.trim()} aria-pressed={eliminateMode} onClick={() => setEliminateMode((value) => !value)}>
+          <button
+            type="button"
+            className={`answer-elimination-toggle ${eliminateMode ? "active" : ""}`.trim()}
+            aria-pressed={eliminateMode}
+            title={eliminateMode ? "Hide choice eliminator" : "Eliminate answer choices"}
+            onClick={() => setEliminateMode((value) => !value)}
+          >
             <span aria-hidden="true">ABC</span>
-            {eliminateMode ? "Hide eliminator" : "Eliminate choices"}
+            <span className="sr-only">{eliminateMode ? "Hide choice eliminator" : "Eliminate answer choices"}</span>
           </button>
         ) : null}
       </div>

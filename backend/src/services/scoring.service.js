@@ -1,10 +1,24 @@
 import { normalizeOptionValue, normalizeTextAnswer, percentage } from "../utils/normalize.js";
 
-const DIFFICULTY_PARAMETERS = {
-  EASY: -1.1,
-  MEDIUM: 0,
-  HARD: 1.1,
+const DIFFICULTY_WEIGHTS = {
+  EASY: 0.94,
+  MEDIUM: 1,
+  HARD: 1.06,
 };
+
+const SAT_SCORE_ANCHORS = [
+  [0, 200],
+  [0.1, 260],
+  [0.2, 320],
+  [0.3, 370],
+  [0.4, 420],
+  [0.5, 480],
+  [0.6, 540],
+  [0.7, 610],
+  [0.8, 680],
+  [0.9, 740],
+  [1, 800],
+];
 
 const MIN_SECTION_SCORE = 200;
 const MAX_SECTION_SCORE = 800;
@@ -62,49 +76,28 @@ function roundToTen(value) {
   return Math.round(value / 10) * 10;
 }
 
-function getDifficultyParameter(question) {
-  return DIFFICULTY_PARAMETERS[String(question.difficulty || "MEDIUM").toUpperCase()] ?? 0;
+function interpolateSatScore(ratio) {
+  const normalizedRatio = clamp(ratio, 0, 1);
+  const upperIndex = SAT_SCORE_ANCHORS.findIndex(([anchorRatio]) => anchorRatio >= normalizedRatio);
+  if (upperIndex <= 0) return SAT_SCORE_ANCHORS[0][1];
+
+  const [lowerRatio, lowerScore] = SAT_SCORE_ANCHORS[upperIndex - 1];
+  const [upperRatio, upperScore] = SAT_SCORE_ANCHORS[upperIndex];
+  const progress = (normalizedRatio - lowerRatio) / (upperRatio - lowerRatio);
+  return roundToTen(lowerScore + progress * (upperScore - lowerScore));
 }
 
-function isStudentProducedResponse(question) {
-  return question.type === "text_input"
-    || (question.type === "math_question" && !question.options?.length);
-}
+function weightedCorrectRatio(results) {
+  const totalWeight = results.reduce((sum, item) => (
+    sum + (DIFFICULTY_WEIGHTS[String(item.question.difficulty || "MEDIUM").toUpperCase()] || 1)
+  ), 0);
+  if (!totalWeight) return 0;
 
-function probabilityOfCorrect(theta, question) {
-  const discrimination = 1.35;
-  const guessing = isStudentProducedResponse(question) ? 0 : 0.25;
-  const difficulty = getDifficultyParameter(question);
-  return guessing + (1 - guessing) / (1 + Math.exp(-discrimination * (theta - difficulty)));
-}
-
-function estimateTheta(results) {
-  if (!results.length) return -3.5;
-  const correct = results.filter((item) => item.isCorrect).length;
-  if (correct === 0) return -3.5;
-  if (correct === results.length) return 3.5;
-
-  let bestTheta = -3.5;
-  let bestLikelihood = Number.NEGATIVE_INFINITY;
-
-  for (let theta = -3.5; theta <= 3.5001; theta += 0.05) {
-    const likelihood = results.reduce((sum, item) => {
-      const probability = clamp(probabilityOfCorrect(theta, item.question), 0.000001, 0.999999);
-      return sum + (item.isCorrect ? Math.log(probability) : Math.log(1 - probability));
-    }, 0);
-
-    if (likelihood > bestLikelihood) {
-      bestLikelihood = likelihood;
-      bestTheta = theta;
-    }
-  }
-
-  return bestTheta;
-}
-
-function thetaToScaledScore(theta) {
-  const percentile = 1 / (1 + Math.exp(-1.08 * theta));
-  return roundToTen(MIN_SECTION_SCORE + percentile * (MAX_SECTION_SCORE - MIN_SECTION_SCORE));
+  const earnedWeight = results.reduce((sum, item) => {
+    if (!item.isCorrect) return sum;
+    return sum + (DIFFICULTY_WEIGHTS[String(item.question.difficulty || "MEDIUM").toUpperCase()] || 1);
+  }, 0);
+  return earnedWeight / totalWeight;
 }
 
 function normalizeConversionTable(table) {
@@ -159,11 +152,7 @@ function estimateSectionScore(exam, sectionType, results, selectedRoutes) {
   const configuredScore = getConfiguredScore(exam, sectionType, rawCorrect, route);
   if (configuredScore !== null) return configuredScore;
 
-  let scaledScore = rawCorrect === 0
-    ? MIN_SECTION_SCORE
-    : rawCorrect === results.length
-      ? MAX_SECTION_SCORE
-      : thetaToScaledScore(estimateTheta(results));
+  let scaledScore = interpolateSatScore(weightedCorrectRatio(results));
   if (route === "LOWER") {
     scaledScore = Math.min(scaledScore, LOWER_ROUTE_CEILING);
   }

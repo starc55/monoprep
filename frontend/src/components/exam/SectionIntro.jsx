@@ -2,10 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Flag, HelpCircle, Play, VolumeX } from 'lucide-react';
 import Button from '../ui/Button.jsx';
 import { formatSeconds } from '../../utils/format.js';
-
-function hasAnswer(answer) {
-  return Boolean(answer?.value || answer?.values?.length);
-}
+import { hasAnswer } from '../../utils/exam.js';
 
 export default function SectionIntro({
   section,
@@ -15,9 +12,11 @@ export default function SectionIntro({
   onContinue,
   onReviewQuestion,
   isFinal = false,
-  showScheduledBreak = false
+  showScheduledBreak = false,
+  reviewOnly = false,
+  startWithBreak = false
 }) {
-  const [mode, setMode] = useState(completedSection ? 'summary' : 'intro');
+  const [mode, setMode] = useState(startWithBreak ? 'break' : completedSection ? 'summary' : 'intro');
   const [secondsLeft, setSecondsLeft] = useState(600);
   const [musicOn, setMusicOn] = useState(false);
   const audioRef = useRef(null);
@@ -97,9 +96,9 @@ export default function SectionIntro({
       <div className="module-complete-screen">
         <header className="module-complete-hero">
           <div>
-            <h1>Module Complete!</h1>
+            <h1>{reviewOnly ? 'Check Your Work' : 'Module Complete!'}</h1>
             <p>{completedSection.title}</p>
-            <span>Review answered, flagged, and unanswered items before moving forward.</span>
+            <span>{reviewOnly ? 'Review any question before submitting this module.' : 'Review answered, flagged, and unanswered items before moving forward.'}</span>
           </div>
           <div className="questions-answered-badge">
             <strong>{stats.answered}/{stats.total}</strong>
@@ -117,7 +116,7 @@ export default function SectionIntro({
           <section className="module-question-nav">
             <div>
               <h2>Question Navigator</h2>
-              <p>Click any question number from the bottom selector in the exam to revisit it before submission.</p>
+              <p>Choose any question number to revisit it. Unanswered questions do not prevent you from continuing.</p>
             </div>
             <div className="module-question-grid">
               {completedSection.questions.map((question, index) => (
@@ -138,7 +137,11 @@ export default function SectionIntro({
               <span><i /> Unanswered ({stats.unanswered})</span>
             </div>
             <Button onClick={() => showScheduledBreak ? setMode('break') : onContinue()}>
-              {showScheduledBreak ? 'Continue to scheduled break' : 'Continue to next module'}
+              {showScheduledBreak
+                ? 'Continue to scheduled break'
+                : reviewOnly
+                  ? (isFinal ? 'Submit exam' : 'Continue to next module')
+                  : 'Continue to next module'}
             </Button>
           </section>
         </main>

@@ -134,6 +134,63 @@ function normalizeText(value) {
   return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+function detectedSectionType(question) {
+  const label = normalizeText(`${question?.sectionType || ''} ${question?.sectionTitle || ''} ${question?.moduleTitle || ''}`);
+  if (/math/.test(label)) return 'math';
+  if (/reading|writing|english|r&w|rw/.test(label)) return 'reading_writing';
+  return null;
+}
+
+function explicitModuleNumber(question, type) {
+  const match = String(question?.moduleTitle || '').match(/module\s*([1-4])/i);
+  if (!match) return null;
+  const sourceNumber = Number(match[1]);
+  if (type === 'math' && sourceNumber >= 3) return sourceNumber - 2;
+  return sourceNumber <= 2 ? sourceNumber : null;
+}
+
+export function normalizeSatModuleAssignments(questions) {
+  const state = {
+    reading_writing: { moduleNumber: 1, lastQuestionNumber: null, lastPage: null },
+    math: { moduleNumber: 1, lastQuestionNumber: null, lastPage: null }
+  };
+
+  return questions.map((question) => {
+    const type = detectedSectionType(question);
+    if (!type) return question;
+
+    const currentState = state[type];
+    const explicitNumber = explicitModuleNumber(question, type);
+    const questionNumberMatch = String(question.questionNumber || '').match(/\d+/);
+    const questionNumber = questionNumberMatch ? Number(questionNumberMatch[0]) : null;
+    const sourcePage = Number(question.sourcePage);
+
+    if (explicitNumber) {
+      currentState.moduleNumber = explicitNumber;
+    } else if (
+      currentState.moduleNumber === 1
+      && Number.isInteger(questionNumber)
+      && Number.isInteger(currentState.lastQuestionNumber)
+      && currentState.lastQuestionNumber >= 10
+      && questionNumber <= 3
+      && (!Number.isFinite(currentState.lastPage) || sourcePage >= currentState.lastPage)
+    ) {
+      currentState.moduleNumber = 2;
+    }
+
+    currentState.lastQuestionNumber = questionNumber ?? currentState.lastQuestionNumber;
+    currentState.lastPage = Number.isFinite(sourcePage) ? sourcePage : currentState.lastPage;
+    const sectionTitle = type === 'math' ? 'Math' : 'Reading and Writing';
+
+    return {
+      ...question,
+      sectionType: type,
+      sectionTitle,
+      moduleTitle: `${sectionTitle} Module ${currentState.moduleNumber}`
+    };
+  });
+}
+
 function splitLongPage(page) {
   if (page.text.length <= MAX_CHUNK_CHARACTERS) return [page];
   const parts = [];
@@ -181,6 +238,8 @@ function chunkPrompt(chunk, index, total) {
     'Extract only information explicitly supported by the supplied text.',
     'Never invent a correct answer or explanation. Use null when either is absent.',
     'Preserve shared passages once and reference them through passageKey.',
+    'For a digital SAT, classify every question into exactly one canonical module: Reading and Writing Module 1, Reading and Writing Module 2, Math Module 1, or Math Module 2.',
+    'Some PDFs number those four modules globally as 1, 2, 3, 4. In that case modules 3 and 4 are Math Module 1 and Math Module 2.',
     'Map question type and difficulty to the allowed enum values when clear; otherwise use null.',
     'sourcePage must match the SOURCE PAGE marker.',
     pageText
@@ -226,6 +285,8 @@ function visualChunkPrompt(chunk, index, total) {
     'Read the page images, including passages, tables, formulas, diagrams, question text, and answer choices.',
     'Use original source page numbers from the mapping for every passage and question.',
     'Preserve shared passages once and reference them through passageKey.',
+    'For a digital SAT, classify every question into exactly one canonical module: Reading and Writing Module 1, Reading and Writing Module 2, Math Module 1, or Math Module 2.',
+    'Some PDFs number those four modules globally as 1, 2, 3, 4. In that case modules 3 and 4 are Math Module 1 and Math Module 2.',
     'Determine the correct answer by solving the question when it is not visibly marked; use null only when it cannot be determined reliably.',
     'Map question type and difficulty to the allowed enum values when clear; otherwise use null.',
     'Do not create questions from headers, directions, answer keys, or page furniture.'
@@ -533,7 +594,8 @@ export async function createPdfImportPreview({
 
     const merged = mergeParsedChunks([...textParseResult.parsedChunks, ...visionParseResult.parsedChunks]);
     const passageIds = new Set(merged.passages.map((passage) => passage.temporaryId));
-    const questions = validateDraftQuestions(merged.questions, {
+    const normalizedQuestions = normalizeSatModuleAssignments(merged.questions);
+    const questions = validateDraftQuestions(normalizedQuestions, {
       pageCount: extraction.pageCount,
       passageIds
     });

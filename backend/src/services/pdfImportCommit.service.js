@@ -17,6 +17,18 @@ function sectionLabel(type) {
   return type === 'math' ? 'Math' : 'Reading and Writing';
 }
 
+function canonicalModuleNumber(question, type) {
+  const match = clean(question.moduleTitle).match(/module\s*([1-4])/i);
+  if (!match) return 1;
+  const sourceNumber = Number(match[1]);
+  if (type === 'math' && sourceNumber >= 3) return sourceNumber - 2;
+  return sourceNumber === 2 ? 2 : 1;
+}
+
+function moduleOrder(type, moduleNumber) {
+  return type === 'math' ? moduleNumber + 2 : moduleNumber;
+}
+
 function acceptedAnswers(question) {
   const answer = question.correctAnswer;
   if (Array.isArray(answer)) return answer.map(clean).filter(Boolean);
@@ -81,10 +93,17 @@ export function buildPdfImportPlan({ setup, draft }) {
       continue;
     }
 
-    const moduleTitle = clean(question.moduleTitle) || `${sectionLabel(type)} Module 1`;
-    const groupKey = `${type}:${moduleTitle.toLowerCase()}`;
+    const moduleNumber = canonicalModuleNumber(question, type);
+    const moduleTitle = `${sectionLabel(type)} Module ${moduleNumber}`;
+    const groupKey = `${type}:${moduleNumber}`;
     if (!groups.has(groupKey)) {
-      groups.set(groupKey, { type, title: moduleTitle, questions: [] });
+      groups.set(groupKey, {
+        type,
+        title: moduleTitle,
+        moduleNumber,
+        order: moduleOrder(type, moduleNumber),
+        questions: []
+      });
     }
 
     const correctLabels = answers.map((answer) => answer.toUpperCase());
@@ -110,7 +129,9 @@ export function buildPdfImportPlan({ setup, draft }) {
     });
   }
 
-  const modules = [...groups.values()].filter((group) => group.questions.length);
+  const modules = [...groups.values()]
+    .filter((group) => group.questions.length)
+    .sort((left, right) => left.order - right.order);
   if (!modules.length) {
     throw new ApiError(400, 'None of the selected questions can be imported safely.');
   }
@@ -165,7 +186,6 @@ export async function commitPdfImport(payload, db = prisma) {
       let importedQuestions = 0;
       for (let moduleIndex = 0; moduleIndex < plan.modules.length; moduleIndex += 1) {
         const module = plan.modules[moduleIndex];
-        const sameTypeIndex = plan.modules.slice(0, moduleIndex).filter((item) => item.type === module.type).length;
         const section = await transaction.section.create({
           data: {
             examId: exam.id,
@@ -173,7 +193,7 @@ export async function commitPdfImport(payload, db = prisma) {
             type: module.type,
             duration: module.type === 'math' ? 35 : 32,
             order: moduleIndex + 1,
-            adaptiveRole: sameTypeIndex === 0 ? 'MODULE_1' : 'STANDARD',
+            adaptiveRole: module.moduleNumber === 1 ? 'MODULE_1' : 'STANDARD',
             routingThreshold: 60
           }
         });

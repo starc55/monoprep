@@ -52,6 +52,25 @@ test('builds an atomic import plan with modules, passages, and answer choices', 
   assert.deepEqual(plan.modules[0].questions[0].options.map((option) => option.isCorrect), [false, true]);
 });
 
+test('orders globally numbered PDF modules as the four SAT modules', () => {
+  const input = payload();
+  const baseQuestion = input.draft.questions[0];
+  input.draft.questions = [
+    { ...baseQuestion, temporaryId: 'rw-2', moduleTitle: 'Module 2' },
+    { ...baseQuestion, temporaryId: 'math-4', sectionType: 'math', sectionTitle: 'Math', moduleTitle: 'Module 4', passageTempId: null },
+    { ...baseQuestion, temporaryId: 'rw-1', moduleTitle: 'Module 1' },
+    { ...baseQuestion, temporaryId: 'math-3', sectionType: 'math', sectionTitle: 'Math', moduleTitle: 'Module 3', passageTempId: null }
+  ];
+
+  const plan = buildPdfImportPlan(input);
+  assert.deepEqual(plan.modules.map((module) => module.title), [
+    'Reading and Writing Module 1',
+    'Reading and Writing Module 2',
+    'Math Module 1',
+    'Math Module 2'
+  ]);
+});
+
 test('normalizes duplicate answer labels before the database transaction', () => {
   const input = payload();
   input.draft.questions[0].options = [

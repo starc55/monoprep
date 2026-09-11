@@ -45,6 +45,21 @@ test("lower adaptive route applies the estimate ceiling", () => {
   assert.equal(summary.mathScore, 650);
 });
 
+test("SAT estimate uses a calibrated score curve instead of depressing mid-range results", () => {
+  const sections = [
+    { id: "rw", title: "Reading", type: "reading_writing", adaptiveRole: "STANDARD" },
+    { id: "math", title: "Math", type: "math", adaptiveRole: "STANDARD" },
+  ];
+  const summary = buildScoreSummary(
+    { sections, scoringModel: "SAT_ESTIMATE_V1" },
+    [...makeResults("rw", 54, 27), ...makeResults("math", 44, 22)]
+  );
+
+  assert.ok(summary.readingWritingScore >= 460 && summary.readingWritingScore <= 500);
+  assert.ok(summary.mathScore >= 460 && summary.mathScore <= 500);
+  assert.ok(summary.totalScore >= 920 && summary.totalScore <= 1000);
+});
+
 test("an exam-specific conversion table overrides the estimate", () => {
   const sections = [{ id: "rw", title: "Reading", type: "reading_writing", adaptiveRole: "STANDARD" }];
   const results = makeResults("rw", 5, 4);

@@ -24,7 +24,7 @@ import { useExamStore } from "../store/examStore.js";
 import { useCountdown } from "../hooks/useCountdown.js";
 import { useExamGuard } from "../hooks/useExamGuard.js";
 import { useAuthStore } from "../store/authStore.js";
-import { getCurrentQuestion } from "../utils/exam.js";
+import { getCurrentQuestion, hasAnswer } from "../utils/exam.js";
 
 function clampSplit(value) {
   return Math.min(68, Math.max(32, value));
@@ -52,6 +52,8 @@ export default function ExamRoomPage() {
   const [transitionSectionIndex, setTransitionSectionIndex] = useState(null);
   const [completedSectionForTransition, setCompletedSectionForTransition] =
     useState(null);
+  const [transitionStartsWithBreak, setTransitionStartsWithBreak] = useState(false);
+  const [sectionReviewOpen, setSectionReviewOpen] = useState(false);
   const [banner, setBanner] = useState("");
   const advancingRef = useRef(false);
   const bodyRef = useRef(null);
@@ -366,9 +368,7 @@ export default function ExamRoomPage() {
 
   function getDialogCopy() {
     const answeredCount = currentSection.questions.filter((question) =>
-      Boolean(
-        answerMap[question.id]?.value || answerMap[question.id]?.values?.length
-      )
+      hasAnswer(answerMap[question.id])
     ).length;
     const reviewCount = currentSection.questions.filter(
       (question) => reviewFlags[question.id]
@@ -524,12 +524,13 @@ export default function ExamRoomPage() {
       return;
     }
 
-    setModalOpen(true);
+    setSectionReviewOpen(true);
   }
 
-  function beginSectionTransition(index, completedSection) {
+  function beginSectionTransition(index, completedSection, startWithBreak = false) {
     setCompletedSectionForTransition(completedSection);
     setTransitionSectionIndex(index);
+    setTransitionStartsWithBreak(startWithBreak);
   }
 
   async function advanceSection() {
@@ -583,7 +584,11 @@ export default function ExamRoomPage() {
     }
 
     setSubmitting(false);
-    beginSectionTransition(nextIndex, currentSection);
+    beginSectionTransition(
+      nextIndex,
+      null,
+      currentSection.type === "reading_writing" && refreshedSections[nextIndex]?.type === "math"
+    );
   }
 
   if (loading) {
@@ -638,6 +643,7 @@ export default function ExamRoomPage() {
           reviewFlags={reviewFlags}
           showScheduledBreak={completedSectionForTransition?.type === "reading_writing"
             && sections[transitionSectionIndex]?.type === "math"}
+          startWithBreak={transitionStartsWithBreak}
           onReviewQuestion={(questionIndex) => {
             const completedIndex = sections.findIndex((item) => item.id === completedSectionForTransition?.id);
             if (completedIndex < 0) return;
@@ -648,6 +654,7 @@ export default function ExamRoomPage() {
             });
             setTransitionSectionIndex(null);
             setCompletedSectionForTransition(null);
+            setTransitionStartsWithBreak(false);
           }}
           onContinue={() => {
             updateSession(attemptId, {
@@ -657,6 +664,30 @@ export default function ExamRoomPage() {
             });
             setTransitionSectionIndex(null);
             setCompletedSectionForTransition(null);
+            setTransitionStartsWithBreak(false);
+          }}
+        />
+      </ExamLayout>
+    );
+  }
+
+  if (sectionReviewOpen) {
+    return (
+      <ExamLayout>
+        <SectionIntro
+          section={currentSection}
+          completedSection={currentSection}
+          answers={answerMap}
+          reviewFlags={reviewFlags}
+          reviewOnly
+          isFinal={currentSectionIndex === sections.length - 1}
+          onReviewQuestion={(questionIndex) => {
+            updateSession(attemptId, { currentQuestionIndex: questionIndex });
+            setSectionReviewOpen(false);
+          }}
+          onContinue={() => {
+            setSectionReviewOpen(false);
+            advanceSection();
           }}
         />
       </ExamLayout>
@@ -777,7 +808,7 @@ export default function ExamRoomPage() {
             onSelect={selectQuestion}
             onReview={() => {
               setPaletteOpen(false);
-              setActiveDialog("review");
+              setSectionReviewOpen(true);
             }}
           />
         </div>

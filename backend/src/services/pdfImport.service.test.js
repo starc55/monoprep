@@ -29,6 +29,40 @@ test('normalizes global SAT module numbering into four canonical modules', () =>
   ]);
 });
 
+test('assigns the official 27/27/22/22 SAT module sizes in source order', () => {
+  const reading = Array.from({ length: 54 }, (_, index) => validQuestion({
+    questionNumber: String((index % 27) + 1),
+    sourcePage: index + 1,
+    sectionType: 'reading_writing',
+    sectionTitle: 'Reading and Writing',
+    moduleTitle: index % 2 ? 'Module 1' : 'Module 2'
+  }));
+  const math = Array.from({ length: 44 }, (_, index) => validQuestion({
+    questionNumber: String((index % 22) + 1),
+    sourcePage: index + 55,
+    sectionType: 'math',
+    sectionTitle: 'Math',
+    moduleTitle: index % 2 ? 'Module 4' : 'Module 3'
+  }));
+
+  const normalized = normalizeSatModuleAssignments([...reading, ...math]);
+  const counts = normalized.reduce((result, question) => {
+    result[question.moduleTitle] = (result[question.moduleTitle] || 0) + 1;
+    return result;
+  }, {});
+
+  assert.deepEqual(counts, {
+    'Reading and Writing Module 1': 27,
+    'Reading and Writing Module 2': 27,
+    'Math Module 1': 22,
+    'Math Module 2': 22
+  });
+  assert.deepEqual(normalized.slice(0, 27).map((question) => question.questionNumber),
+    Array.from({ length: 27 }, (_, index) => String(index + 1)));
+  assert.deepEqual(normalized.slice(27, 54).map((question) => question.questionNumber),
+    Array.from({ length: 27 }, (_, index) => String(index + 1)));
+});
+
 function createTextPdf(text) {
   const escapedText = text.replace(/([\\()])/g, '\\$1');
   const stream = `BT /F1 12 Tf 72 720 Td (${escapedText}) Tj ET`;

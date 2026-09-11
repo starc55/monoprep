@@ -17,6 +17,10 @@ const DIFFICULTIES = new Set(['EASY', 'MEDIUM', 'HARD']);
 const MAX_CHUNK_CHARACTERS = 16_000;
 const MAX_TOTAL_CHARACTERS = 240_000;
 const PDF_VISION_TIMEOUT_MS = 180_000;
+const SAT_MODULE_CAPACITY = {
+  reading_writing: 27,
+  math: 22
+};
 
 const nullableString = { anyOf: [{ type: 'string' }, { type: 'null' }] };
 const nullableNumber = { anyOf: [{ type: 'number' }, { type: 'null' }] };
@@ -149,44 +153,62 @@ function explicitModuleNumber(question, type) {
   return sourceNumber <= 2 ? sourceNumber : null;
 }
 
+function numericQuestionNumber(question) {
+  const match = String(question?.questionNumber || '').match(/\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+}
+
+function sortQuestionsBySource(questions) {
+  return questions
+    .map((question, index) => ({ question, index }))
+    .sort((left, right) => {
+      const leftPage = Number.isInteger(Number(left.question?.sourcePage))
+        ? Number(left.question.sourcePage)
+        : Number.MAX_SAFE_INTEGER;
+      const rightPage = Number.isInteger(Number(right.question?.sourcePage))
+        ? Number(right.question.sourcePage)
+        : Number.MAX_SAFE_INTEGER;
+      return leftPage - rightPage
+        || numericQuestionNumber(left.question) - numericQuestionNumber(right.question)
+        || left.index - right.index;
+    })
+    .map(({ question }) => question);
+}
+
 export function normalizeSatModuleAssignments(questions) {
+  const orderedQuestions = sortQuestionsBySource(questions);
+  const sectionTotals = orderedQuestions.reduce((totals, question) => {
+    const type = detectedSectionType(question);
+    if (type) totals[type] += 1;
+    return totals;
+  }, { reading_writing: 0, math: 0 });
   const state = {
-    reading_writing: { moduleNumber: 1, lastQuestionNumber: null, lastPage: null },
-    math: { moduleNumber: 1, lastQuestionNumber: null, lastPage: null }
+    reading_writing: { moduleCounts: { 1: 0, 2: 0 } },
+    math: { moduleCounts: { 1: 0, 2: 0 } }
   };
 
-  return questions.map((question) => {
+  return orderedQuestions.map((question) => {
     const type = detectedSectionType(question);
     if (!type) return question;
 
     const currentState = state[type];
     const explicitNumber = explicitModuleNumber(question, type);
-    const questionNumberMatch = String(question.questionNumber || '').match(/\d+/);
-    const questionNumber = questionNumberMatch ? Number(questionNumberMatch[0]) : null;
-    const sourcePage = Number(question.sourcePage);
-
-    if (explicitNumber) {
-      currentState.moduleNumber = explicitNumber;
-    } else if (
-      currentState.moduleNumber === 1
-      && Number.isInteger(questionNumber)
-      && Number.isInteger(currentState.lastQuestionNumber)
-      && currentState.lastQuestionNumber >= 10
-      && questionNumber <= 3
-      && (!Number.isFinite(currentState.lastPage) || sourcePage >= currentState.lastPage)
-    ) {
-      currentState.moduleNumber = 2;
-    }
-
-    currentState.lastQuestionNumber = questionNumber ?? currentState.lastQuestionNumber;
-    currentState.lastPage = Number.isFinite(sourcePage) ? sourcePage : currentState.lastPage;
+    const assignedCount = currentState.moduleCounts[1] + currentState.moduleCounts[2];
+    const sequentialNumber = assignedCount < SAT_MODULE_CAPACITY[type] ? 1 : 2;
+    const preferredNumber = sectionTotals[type] > SAT_MODULE_CAPACITY[type]
+      ? sequentialNumber
+      : explicitNumber || sequentialNumber;
+    const moduleNumber = currentState.moduleCounts[preferredNumber] < SAT_MODULE_CAPACITY[type]
+      ? preferredNumber
+      : preferredNumber === 1 ? 2 : 1;
+    currentState.moduleCounts[moduleNumber] += 1;
     const sectionTitle = type === 'math' ? 'Math' : 'Reading and Writing';
 
     return {
       ...question,
       sectionType: type,
       sectionTitle,
-      moduleTitle: `${sectionTitle} Module ${currentState.moduleNumber}`
+      moduleTitle: `${sectionTitle} Module ${moduleNumber}`
     };
   });
 }

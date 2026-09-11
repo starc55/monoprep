@@ -3,6 +3,10 @@ import { examDeepInclude } from '../prisma/selects.js';
 import { ApiError } from '../utils/apiError.js';
 
 const QUESTION_TYPES = new Set(['single_choice', 'multi_choice', 'text_input', 'passage_question', 'math_question']);
+const SAT_MODULE_CAPACITY = {
+  reading_writing: 27,
+  math: 22
+};
 
 function clean(value) {
   return String(value || '').trim();
@@ -27,6 +31,17 @@ function canonicalModuleNumber(question, type) {
 
 function moduleOrder(type, moduleNumber) {
   return type === 'math' ? moduleNumber + 2 : moduleNumber;
+}
+
+function numericQuestionNumber(question) {
+  const match = clean(question.questionNumber).match(/\d+/);
+  return match ? Number(match[0]) : Number.MAX_SAFE_INTEGER;
+}
+
+function sourceOrder(left, right) {
+  const leftPage = Number.isInteger(Number(left.sourcePage)) ? Number(left.sourcePage) : Number.MAX_SAFE_INTEGER;
+  const rightPage = Number.isInteger(Number(right.sourcePage)) ? Number(right.sourcePage) : Number.MAX_SAFE_INTEGER;
+  return leftPage - rightPage || numericQuestionNumber(left) - numericQuestionNumber(right);
 }
 
 function acceptedAnswers(question) {
@@ -62,7 +77,9 @@ function normalizedOptions(question) {
 }
 
 export function buildPdfImportPlan({ setup, draft }) {
-  const selectedQuestions = (draft.questions || []).filter((question) => question.status !== 'INVALID');
+  const selectedQuestions = (draft.questions || [])
+    .filter((question) => question.status !== 'INVALID')
+    .sort(sourceOrder);
   if (!selectedQuestions.length) {
     throw new ApiError(400, 'Select at least one valid question to import.');
   }
@@ -70,6 +87,24 @@ export function buildPdfImportPlan({ setup, draft }) {
   const passages = new Map((draft.passages || []).map((passage) => [passage.temporaryId, passage]));
   const groups = new Map();
   const skipped = [];
+  const sectionTotals = selectedQuestions.reduce((totals, question) => {
+    totals[sectionTypeFor(question)] += 1;
+    return totals;
+  }, { reading_writing: 0, math: 0 });
+  const assignedByType = { reading_writing: 0, math: 0 };
+
+  const groupSize = (type, moduleNumber) => groups.get(`${type}:${moduleNumber}`)?.questions.length || 0;
+  const availableModuleNumber = (question, type) => {
+    const sequential = assignedByType[type] < SAT_MODULE_CAPACITY[type] ? 1 : 2;
+    const preferred = sectionTotals[type] > SAT_MODULE_CAPACITY[type]
+      ? sequential
+      : canonicalModuleNumber(question, type);
+    if (groupSize(type, preferred) < SAT_MODULE_CAPACITY[type]) return preferred;
+
+    const alternate = preferred === 1 ? 2 : 1;
+    if (groupSize(type, alternate) < SAT_MODULE_CAPACITY[type]) return alternate;
+    return null;
+  };
 
   for (const question of selectedQuestions) {
     const type = sectionTypeFor(question);
@@ -93,7 +128,15 @@ export function buildPdfImportPlan({ setup, draft }) {
       continue;
     }
 
-    const moduleNumber = canonicalModuleNumber(question, type);
+    const moduleNumber = availableModuleNumber(question, type);
+    if (!moduleNumber) {
+      skipped.push({
+        temporaryId: question.temporaryId,
+        reason: `${sectionLabel(type)} already contains the official SAT limit of ${SAT_MODULE_CAPACITY[type] * 2} questions.`
+      });
+      continue;
+    }
+    assignedByType[type] += 1;
     const moduleTitle = `${sectionLabel(type)} Module ${moduleNumber}`;
     const groupKey = `${type}:${moduleNumber}`;
     if (!groups.has(groupKey)) {

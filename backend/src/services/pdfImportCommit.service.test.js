@@ -71,6 +71,39 @@ test('orders globally numbered PDF modules as the four SAT modules', () => {
   ]);
 });
 
+test('caps imported SAT modules at 27/27/22/22 and skips overflow', () => {
+  const input = payload();
+  const baseQuestion = input.draft.questions[0];
+  input.draft.questions = [
+    ...Array.from({ length: 56 }, (_, index) => ({
+      ...baseQuestion,
+      temporaryId: `rw-${index + 1}`,
+      questionNumber: String((index % 27) + 1),
+      sourcePage: index + 1,
+      moduleTitle: index % 2 ? 'Reading and Writing Module 1' : 'Reading and Writing Module 2'
+    })),
+    ...Array.from({ length: 46 }, (_, index) => ({
+      ...baseQuestion,
+      temporaryId: `math-${index + 1}`,
+      sectionType: 'math',
+      sectionTitle: 'Math',
+      questionNumber: String((index % 22) + 1),
+      sourcePage: index + 57,
+      moduleTitle: index % 2 ? 'Math Module 1' : 'Math Module 2',
+      passageTempId: null
+    }))
+  ];
+
+  const plan = buildPdfImportPlan(input);
+
+  assert.deepEqual(plan.modules.map((module) => module.questions.length), [27, 27, 22, 22]);
+  assert.equal(plan.skipped.length, 4);
+  assert.deepEqual(plan.modules[0].questions.map((question) => question.temporaryId),
+    Array.from({ length: 27 }, (_, index) => `rw-${index + 1}`));
+  assert.deepEqual(plan.modules[2].questions.map((question) => question.temporaryId),
+    Array.from({ length: 22 }, (_, index) => `math-${index + 1}`));
+});
+
 test('normalizes duplicate answer labels before the database transaction', () => {
   const input = payload();
   input.draft.questions[0].options = [

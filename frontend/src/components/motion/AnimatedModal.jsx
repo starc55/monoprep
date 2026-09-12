@@ -5,6 +5,7 @@ export default function AnimatedModal({
   open,
   children,
   className = "",
+  backdropClassName = "",
   labelledBy,
   onClose,
 }) {
@@ -34,7 +35,7 @@ export default function AnimatedModal({
     <AnimatePresence>
       {open ? (
         <motion.div
-          className="modal-backdrop"
+          className={`modal-backdrop ${backdropClassName}`.trim()}
           onMouseDown={(event) => {
             if (event.target === event.currentTarget && onClose) {
               onClose();

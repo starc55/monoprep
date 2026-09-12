@@ -1,4 +1,5 @@
 import api from './api.js';
+import { supabase } from '../config/supabase.js';
 
 export async function getExams() {
   const { data } = await api.get('/exams');
@@ -80,9 +81,22 @@ export async function uploadPassageFile(file) {
 }
 
 export async function previewPdfQuestionImport(file) {
-  const body = new FormData();
-  body.append('file', file);
-  const { data } = await api.post('/ai/pdf-import/preview', body, {
+  const { data: upload } = await api.post('/ai/pdf-import/upload-url', {
+    fileName: file.name,
+    fileSize: file.size,
+    mimeType: file.type
+  });
+  const { error: uploadError } = await supabase.storage
+    .from(upload.bucket)
+    .uploadToSignedUrl(upload.objectPath, upload.token, file, {
+      contentType: 'application/pdf'
+    });
+  if (uploadError) throw uploadError;
+
+  const { data } = await api.post('/ai/pdf-import/preview-storage', {
+    objectPath: upload.objectPath,
+    fileName: upload.fileName
+  }, {
     timeout: 600000
   });
   return data;

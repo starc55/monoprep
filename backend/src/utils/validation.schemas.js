@@ -247,6 +247,20 @@ export const pdfImportCommitSchema = z.object({
   })
 });
 
+export const pdfImportUploadUrlSchema = z.object({
+  fileName: z.string().min(1).max(255).refine(
+    (value) => value.toLowerCase().endsWith('.pdf'),
+    { message: 'The uploaded file must have a .pdf extension.' }
+  ),
+  fileSize: z.number().int().positive().max(20 * 1024 * 1024),
+  mimeType: z.literal('application/pdf')
+});
+
+export const pdfImportStoragePreviewSchema = z.object({
+  objectPath: z.string().min(1).max(500),
+  fileName: z.string().min(1).max(255)
+});
+
 export const questionHubProgressSchema = z.object({
   questionKey: z.string().min(1).max(240),
   answer: z.any().nullable().optional(),

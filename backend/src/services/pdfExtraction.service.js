@@ -2,6 +2,8 @@ import { ApiError } from '../utils/apiError.js';
 
 const MAX_PDF_PAGES = 250;
 const OCR_TEXT_THRESHOLD = 40;
+const MIN_USEFUL_WORDS = 6;
+const REPEATED_LINE_THRESHOLD = 3;
 let pdfJsPromise;
 
 async function loadPdfJs() {
@@ -57,6 +59,43 @@ function extractPageLines(items) {
   return lines.join('\n');
 }
 
+function isWatermarkToken(value) {
+  const token = value.replace(/^[^\p{L}\p{N}@]+|[^\p{L}\p{N}._@:/-]+$/gu, '');
+  if (!token) return true;
+  return /^(?:https?:\/\/\S+|www\.\S+|@[\p{L}\p{N}_.-]+|[a-z]?\d?sat|sat|at)$/iu.test(token);
+}
+
+function isWatermarkOnlyLine(line) {
+  const tokens = normalizeLine(line).split(/\s+/).filter(Boolean);
+  return tokens.length > 0 && tokens.every(isWatermarkToken);
+}
+
+export function hasUsablePdfTextLayer(text) {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .map(normalizeLine)
+    .filter(Boolean);
+
+  if (!lines.length) return false;
+
+  const frequencies = new Map();
+  for (const line of lines) {
+    const key = line.toLocaleLowerCase('en-US');
+    frequencies.set(key, (frequencies.get(key) || 0) + 1);
+  }
+
+  const usefulText = lines
+    .filter((line) => !isWatermarkOnlyLine(line))
+    .filter((line) => frequencies.get(line.toLocaleLowerCase('en-US')) < REPEATED_LINE_THRESHOLD)
+    .join(' ');
+  const usefulCharacterCount = usefulText.replace(/\s/g, '').length;
+  if (usefulCharacterCount < OCR_TEXT_THRESHOLD) return false;
+
+  const words = usefulText.match(/[\p{L}\p{N}]+/gu) || [];
+  const mathCharacters = usefulText.match(/[\d=+\-*/^<>%()[\]{}]/g) || [];
+  return words.length >= MIN_USEFUL_WORDS || mathCharacters.length >= 12;
+}
+
 export async function extractPdfPages(buffer) {
   let document;
   try {
@@ -83,7 +122,7 @@ export async function extractPdfPages(buffer) {
         pageNumber,
         text,
         characterCount,
-        ocrNeeded: characterCount < OCR_TEXT_THRESHOLD
+        ocrNeeded: !hasUsablePdfTextLayer(text)
       });
       page.cleanup();
     }

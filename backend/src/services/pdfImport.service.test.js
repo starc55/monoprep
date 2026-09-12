@@ -5,7 +5,7 @@ import {
   PDF_IMPORT_MAX_BYTES,
   validatePdfUploadFile
 } from '../middleware/pdfImport.middleware.js';
-import { extractPdfPages } from './pdfExtraction.service.js';
+import { extractPdfPages, hasUsablePdfTextLayer } from './pdfExtraction.service.js';
 import {
   createPdfImportPreview,
   normalizeSatModuleAssignments,
@@ -189,6 +189,24 @@ test('marks a page with little extractable text as OCR-needed', async () => {
 
   assert.equal(extraction.pages[0].ocrNeeded, true);
   assert.deepEqual(extraction.ocrNeededPages, [1]);
+});
+
+test('rejects a text layer made only from repeated social watermarks', () => {
+  const watermarkText = Array.from({ length: 80 }, (_, index) => (
+    index % 4 === 0 ? 'https://t.me/D7SAT' : '@D7SAT @D7SAT SAT AT'
+  )).join('\n');
+
+  assert.equal(hasUsablePdfTextLayer(watermarkText), false);
+});
+
+test('keeps useful question text when a page also contains watermarks', () => {
+  const text = [
+    ...Array.from({ length: 20 }, () => '@D7SAT'),
+    'Question 1: Which choice best supports the conclusion in the passage?',
+    'A. The first result B. The second result C. Both results D. Neither result'
+  ].join('\n');
+
+  assert.equal(hasUsablePdfTextLayer(text), true);
 });
 
 test('returns a safe error for a malformed structured AI response', async () => {

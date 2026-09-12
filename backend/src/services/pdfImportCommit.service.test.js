@@ -118,6 +118,7 @@ test('normalizes duplicate answer labels before the database transaction', () =>
 
 test('uses an import-sized timeout for the atomic database transaction', async () => {
   let transactionOptions;
+  const questionBankRows = [];
   const transaction = {
     exam: {
       create: async () => ({ id: 'exam-1' }),
@@ -125,7 +126,8 @@ test('uses an import-sized timeout for the atomic database transaction', async (
     },
     passage: { create: async () => ({ id: 'passage-db-1' }) },
     section: { create: async () => ({ id: 'section-1' }) },
-    question: { create: async () => ({ id: 'question-1' }) }
+    question: { create: async () => ({ id: 'question-1' }) },
+    questionBankItem: { create: async ({ data }) => { questionBankRows.push(data); return data; } }
   };
   const db = {
     $transaction: async (callback, options) => {
@@ -138,6 +140,12 @@ test('uses an import-sized timeout for the atomic database transaction', async (
 
   assert.equal(result.importedQuestions, 1);
   assert.deepEqual(transactionOptions, { maxWait: 15000, timeout: 180000 });
+  assert.equal(questionBankRows.length, 1);
+  assert.equal(questionBankRows[0].id, 'question_copy_question-1');
+  assert.equal(questionBankRows[0].subject, 'Reading & Writing');
+  assert.equal(questionBankRows[0].domain, 'Information & Ideas');
+  assert.equal(questionBankRows[0].skill, 'central_ideas_and_details');
+  assert.deepEqual(questionBankRows[0].correctAnswer, { value: 'B' });
 });
 
 test('skips an ungradable student-produced response', () => {

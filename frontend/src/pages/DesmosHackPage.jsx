@@ -5,6 +5,7 @@ import AppLayout from '../layouts/AppLayout.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import CalculatorModal from '../components/exam/renderers/CalculatorModal.jsx';
+import MathJaxContent from '../components/math/MathJaxContent.jsx';
 import { getDesmosLessons } from '../services/desmosService.js';
 import { resolveAssetUrl } from '../utils/assets.js';
 import '../styles/pages/desmos-hack.css';
@@ -83,7 +84,7 @@ export default function DesmosHackPage() {
                     ))}
                   </div>
                 ) : null}
-                {expanded ? <div className="desmos-theory">{lesson.theory}</div> : null}
+                {expanded ? <MathJaxContent block className="desmos-theory">{lesson.theory}</MathJaxContent> : null}
               </motion.article>
             );
           })}

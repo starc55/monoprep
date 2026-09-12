@@ -21,6 +21,10 @@ const SAT_MODULE_CAPACITY = {
   reading_writing: 27,
   math: 22
 };
+const QUESTION_HUB_SKILL_GUIDE = [
+  'For Reading and Writing, skill must be one of: central_ideas_and_details, inferences, command_of_evidence, words_in_context, text_structure_and_purpose, cross_text_connections, rhetorical_synthesis, transitions, boundaries, form_structure_and_sense.',
+  'For Math, skill must be one of: linear_equations_in_one_variable, linear_functions, linear_equations_in_two_variables, systems_of_two_linear_equations, linear_inequalities, nonlinear_functions, nonlinear_equations_and_systems, equivalent_expressions, ratios_rates_and_proportions, percentages, one_variable_data, two_variable_data, probability, inference_and_margin_of_error, evaluating_statistical_claims, area_and_volume, lines_angles_and_triangles, right_triangles_and_trigonometry, circles.'
+];
 
 const nullableString = { anyOf: [{ type: 'string' }, { type: 'null' }] };
 const nullableNumber = { anyOf: [{ type: 'number' }, { type: 'null' }] };
@@ -262,6 +266,7 @@ function chunkPrompt(chunk, index, total) {
     'Preserve shared passages once and reference them through passageKey.',
     'For a digital SAT, classify every question into exactly one canonical module: Reading and Writing Module 1, Reading and Writing Module 2, Math Module 1, or Math Module 2.',
     'Some PDFs number those four modules globally as 1, 2, 3, 4. In that case modules 3 and 4 are Math Module 1 and Math Module 2.',
+    ...QUESTION_HUB_SKILL_GUIDE,
     'Map question type and difficulty to the allowed enum values when clear; otherwise use null.',
     'sourcePage must match the SOURCE PAGE marker.',
     pageText
@@ -309,6 +314,7 @@ function visualChunkPrompt(chunk, index, total) {
     'Preserve shared passages once and reference them through passageKey.',
     'For a digital SAT, classify every question into exactly one canonical module: Reading and Writing Module 1, Reading and Writing Module 2, Math Module 1, or Math Module 2.',
     'Some PDFs number those four modules globally as 1, 2, 3, 4. In that case modules 3 and 4 are Math Module 1 and Math Module 2.',
+    ...QUESTION_HUB_SKILL_GUIDE,
     'Determine the correct answer by solving the question when it is not visibly marked; use null only when it cannot be determined reliably.',
     'Map question type and difficulty to the allowed enum values when clear; otherwise use null.',
     'Do not create questions from headers, directions, answer keys, or page furniture.'

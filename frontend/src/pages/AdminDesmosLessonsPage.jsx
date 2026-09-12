@@ -6,6 +6,7 @@ import ConfirmActionModal from '../components/ui/ConfirmActionModal.jsx';
 import EmptyState from '../components/ui/EmptyState.jsx';
 import Loader from '../components/ui/Loader.jsx';
 import Modal from '../components/ui/Modal.jsx';
+import RichMathEditor from '../components/math/RichMathEditor.jsx';
 import {
   createDesmosLesson,
   deleteDesmosLesson,
@@ -64,6 +65,10 @@ export default function AdminDesmosLessonsPage() {
 
   async function save(event) {
     event.preventDefault();
+    if (form.theory.trim().length < 20) {
+      setError('Full theory must contain at least 20 characters.');
+      return;
+    }
     setSaving(true);
     setError('');
     try {
@@ -148,7 +153,13 @@ export default function AdminDesmosLessonsPage() {
         <form id="desmos-lesson-form" className="stack-form" onSubmit={save}>
           <label className="form-field"><span>Title</span><input value={form.title} onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))} minLength="3" required /></label>
           <label className="form-field"><span>Short summary</span><textarea value={form.summary} onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))} minLength="10" required /></label>
-          <label className="form-field"><span>Full theory</span><textarea className="desmos-theory-input" value={form.theory} onChange={(event) => setForm((current) => ({ ...current, theory: event.target.value }))} minLength="20" required /></label>
+          <RichMathEditor
+            label="Full theory"
+            value={form.theory}
+            onChange={(theory) => setForm((current) => ({ ...current, theory }))}
+            className="desmos-theory-input"
+            placeholder="Write the lesson theory and insert editable math formulas."
+          />
           <div className="form-field">
             <span>Lesson images <small>{form.imageUrls.length}/8</small></span>
             <label className="desmos-file-picker">

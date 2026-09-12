@@ -1,12 +1,14 @@
 import { prisma } from '../config/prisma.js';
 import { examDeepInclude } from '../prisma/selects.js';
 import { ApiError } from '../utils/apiError.js';
+import { normalizeQuestionHubClassification } from '../utils/questionHubCatalog.js';
 
 const QUESTION_TYPES = new Set(['single_choice', 'multi_choice', 'text_input', 'passage_question', 'math_question']);
 const SAT_MODULE_CAPACITY = {
   reading_writing: 27,
   math: 22
 };
+const QUESTION_COPY_ID_PREFIX = 'question_copy_';
 
 function clean(value) {
   return String(value || '').trim();
@@ -243,7 +245,7 @@ export async function commitPdfImport(payload, db = prisma) {
 
         for (let questionIndex = 0; questionIndex < module.questions.length; questionIndex += 1) {
           const question = module.questions[questionIndex];
-          await transaction.question.create({
+          const createdQuestion = await transaction.question.create({
             data: {
               sectionId: section.id,
               passageId: passageIdMap.get(question.passageTempId) || null,
@@ -259,6 +261,25 @@ export async function commitPdfImport(payload, db = prisma) {
               explanation: question.explanation,
               order: questionIndex + 1,
               options: question.options.length ? { create: question.options } : undefined
+            }
+          });
+          const subject = module.type === 'math' ? 'Math' : 'Reading & Writing';
+          const classification = normalizeQuestionHubClassification(subject, '', question.skill);
+          await transaction.questionBankItem.create({
+            data: {
+              id: `${QUESTION_COPY_ID_PREFIX}${createdQuestion.id}`,
+              subject,
+              domain: classification.domain,
+              skill: classification.skill,
+              difficulty: question.difficulty,
+              prompt: question.questionText,
+              choices: question.options.length
+                ? question.options.map(({ label, text, imageUrl }) => ({ label, text, imageUrl }))
+                : null,
+              correctAnswer: question.correctAnswer,
+              explanation: question.explanation,
+              isBluebook: true,
+              isActive: true
             }
           });
           importedQuestions += 1;

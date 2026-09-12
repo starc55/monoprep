@@ -138,6 +138,8 @@ export default function RichMathEditor({
   form,
   name,
   label,
+  value: controlledValue,
+  onChange,
   placeholder = '',
   className = '',
   rules,
@@ -146,9 +148,10 @@ export default function RichMathEditor({
   const editorRef = useRef(null);
   const selectionRef = useRef(null);
   const lastEmittedValueRef = useRef(null);
-  const value = form.watch(name) || '';
+  const value = (form ? form.watch(name) : controlledValue) || '';
 
   useEffect(() => {
+    if (!form) return undefined;
     form.register(name, rules);
     return () => {
       form.unregister(name);
@@ -160,8 +163,12 @@ export default function RichMathEditor({
     if (!editor) return;
     const nextValue = serializeEditor(editor);
     lastEmittedValueRef.current = nextValue;
-    form.setValue(name, nextValue, { shouldDirty: true, shouldValidate: true });
-  }, [form, name]);
+    if (form) {
+      form.setValue(name, nextValue, { shouldDirty: true, shouldValidate: true });
+    } else {
+      onChange?.(nextValue);
+    }
+  }, [form, name, onChange]);
 
   useEffect(() => {
     const editor = editorRef.current;

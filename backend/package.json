@@ -25,6 +25,7 @@
     "seed": "node src/seed/seed.js"
   },
   "dependencies": {
+    "@napi-rs/canvas": "^0.1.100",
     "@prisma/client": "^6.8.2",
     "@supabase/supabase-js": "2.110.8",
     "cors": "^2.8.5",

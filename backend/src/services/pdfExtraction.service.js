@@ -1,8 +1,22 @@
-import { getDocument } from 'pdfjs-dist/legacy/build/pdf.mjs';
 import { ApiError } from '../utils/apiError.js';
 
 const MAX_PDF_PAGES = 250;
 const OCR_TEXT_THRESHOLD = 40;
+let pdfJsPromise;
+
+async function loadPdfJs() {
+  if (!pdfJsPromise) {
+    pdfJsPromise = (async () => {
+      const canvas = await import('@napi-rs/canvas');
+      globalThis.DOMMatrix ||= canvas.DOMMatrix;
+      globalThis.ImageData ||= canvas.ImageData;
+      globalThis.Path2D ||= canvas.Path2D;
+      return import('pdfjs-dist/legacy/build/pdf.mjs');
+    })();
+  }
+
+  return pdfJsPromise;
+}
 
 function normalizeLine(value) {
   return value.replace(/[ \t]+/g, ' ').trim();
@@ -46,6 +60,7 @@ function extractPageLines(items) {
 export async function extractPdfPages(buffer) {
   let document;
   try {
+    const { getDocument } = await loadPdfJs();
     const loadingTask = getDocument({
       data: new Uint8Array(buffer),
       disableWorker: true,

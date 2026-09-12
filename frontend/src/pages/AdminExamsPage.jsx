@@ -589,8 +589,8 @@ export default function AdminExamsPage({ mode = "admin" }) {
         </Card>
       </div>
 
-      <Modal open={pdfImportOpen} title="Import exam from PDF" className="modal-card-wide pdf-import-preview-modal" onClose={() => !pdfImportSaving && setPdfImportOpen(false)} actions={<>
-        {pdfImportStep === "setup" ? <Button variant="ghost" disabled={pdfImportSaving} onClick={() => setPdfImportStep("review")}><ArrowLeft aria-hidden="true" /> Review</Button> : <Button variant="ghost" disabled={pdfImportSaving} onClick={() => setPdfImportOpen(false)}>Close</Button>}
+      <Modal open={pdfImportOpen} title="Import exam from PDF" className="modal-card-wide pdf-import-preview-modal" onClose={() => !pdfImporting && !pdfImportSaving && setPdfImportOpen(false)} actions={<>
+        {pdfImportStep === "setup" ? <Button variant="ghost" disabled={pdfImportSaving} onClick={() => setPdfImportStep("review")}><ArrowLeft aria-hidden="true" /> Review</Button> : <Button variant="ghost" disabled={pdfImporting || pdfImportSaving} onClick={() => setPdfImportOpen(false)}>Close</Button>}
         {!pdfImporting && pdfImportPreview && pdfImportStep === "review" ? <Button disabled={!pdfImportSelected.length} onClick={() => { setPdfImportError(""); setPdfImportStep("setup"); }}>Continue with {pdfImportSelected.length}</Button> : null}
         {pdfImportStep === "setup" ? <Button disabled={pdfImportSaving} onClick={handlePdfImportCommit}>{pdfImportSaving ? "Importing..." : "Create draft exam"}</Button> : null}
         {pdfImportStep === "complete" ? <Button onClick={openImportedExam}>Open imported exam</Button> : null}

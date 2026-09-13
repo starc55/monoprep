@@ -6,6 +6,7 @@ import {
   Download,
   Eye,
   FileQuestion,
+  Flag,
   ChevronLeft,
   ChevronRight,
   Sparkles,
@@ -24,6 +25,7 @@ import PassageAssetViewer from "../components/exam/PassageAssetViewer.jsx";
 import MathJaxContent from "../components/math/MathJaxContent.jsx";
 import { getAttempt } from "../services/attemptService.js";
 import { generateFeedback } from "../services/aiService.js";
+import { sendQuestionReport } from "../services/supportService.js";
 import { getDisplayAnswer } from "../utils/exam.js";
 import { formatSeconds } from "../utils/format.js";
 import { useAuthStore } from "../store/authStore.js";
@@ -37,6 +39,14 @@ const viewCountOptions = [
   { value: "10", label: "10" },
   { value: "30", label: "30" },
   { value: "ALL", label: "All" },
+];
+const reportReasonOptions = [
+  { value: "INCORRECT_ANSWER", label: "Incorrect answer key" },
+  { value: "QUESTION_TEXT", label: "Question text issue" },
+  { value: "ANSWER_CHOICES", label: "Answer choices issue" },
+  { value: "EXPLANATION", label: "Explanation issue" },
+  { value: "IMAGE", label: "Image or diagram issue" },
+  { value: "OTHER", label: "Other issue" },
 ];
 
 const REPORT_DOMAINS = [
@@ -154,6 +164,11 @@ export default function ExamReviewPage() {
   const [surveyOpen, setSurveyOpen] = useState(false);
   const [rating, setRating] = useState(0);
   const [surveyStep, setSurveyStep] = useState(1);
+  const [reportRow, setReportRow] = useState(null);
+  const [reportReason, setReportReason] = useState("INCORRECT_ANSWER");
+  const [reportMessage, setReportMessage] = useState("");
+  const [reportSending, setReportSending] = useState(false);
+  const [reportStatus, setReportStatus] = useState({ type: "", message: "" });
 
   useEffect(() => {
     async function loadReview() {
@@ -343,6 +358,47 @@ export default function ExamReviewPage() {
       JSON.stringify({ rating, submittedAt: new Date().toISOString() })
     );
     setSurveyOpen(false);
+  }
+
+  function openQuestionReport(row) {
+    setReportRow(row);
+    setSelectedRow(null);
+    setReportReason("INCORRECT_ANSWER");
+    setReportMessage("");
+    setReportStatus({ type: "", message: "" });
+  }
+
+  function closeQuestionReport() {
+    if (reportSending) return;
+    const row = reportRow;
+    setReportRow(null);
+    if (row) setSelectedRow(row);
+  }
+
+  async function handleQuestionReport() {
+    if (!reportRow || reportSending) return;
+    setReportSending(true);
+    setReportStatus({ type: "", message: "" });
+    try {
+      await sendQuestionReport({
+        attemptId: attempt.id,
+        questionId: reportRow.id,
+        reason: reportReason,
+        message: reportMessage.trim() || undefined,
+        pageUrl: window.location.href,
+      });
+      setReportStatus({
+        type: "success",
+        message: "Report sent. The MonoPrep team received it in Telegram.",
+      });
+    } catch (error) {
+      setReportStatus({
+        type: "error",
+        message: error.response?.data?.message || "The report could not be sent right now.",
+      });
+    } finally {
+      setReportSending(false);
+    }
   }
 
   return (
@@ -542,6 +598,9 @@ export default function ExamReviewPage() {
                   {statusLabel(selectedRow.status)}
                 </span>
               </div>
+              <button type="button" className="review-report-button" onClick={() => openQuestionReport(selectedRow)}>
+                <Flag aria-hidden="true" /> Report
+              </button>
               <button type="button" onClick={() => setReviewAnswersVisible((value) => !value)}>
                 <Eye aria-hidden="true" /> {reviewAnswersVisible ? "Hide answers" : "Show answers"}
               </button>
@@ -605,6 +664,55 @@ export default function ExamReviewPage() {
                     aiQuestionFeedback.explanation}
                 </MathJaxContent>
               </div>
+            ) : null}
+          </div>
+        ) : null}
+      </Modal>
+      <Modal
+        open={Boolean(reportRow)}
+        title={reportRow ? `Report question #${reportRow.number}` : "Report question"}
+        className="question-report-modal"
+        onClose={closeQuestionReport}
+        actions={
+          <>
+            <Button variant="ghost" disabled={reportSending} onClick={closeQuestionReport}>
+              Close
+            </Button>
+            {!reportStatus.message || reportStatus.type === "error" ? (
+              <Button disabled={reportSending} onClick={handleQuestionReport}>
+                <Flag aria-hidden="true" /> {reportSending ? "Sending..." : "Send report"}
+              </Button>
+            ) : null}
+          </>
+        }
+      >
+        {reportRow ? (
+          <div className="question-report-form">
+            <div className="question-report-context">
+              <span>{reportRow.moduleLabel}</span>
+              <strong>Question {reportRow.number}</strong>
+              <small>{reportRow.question.skill}</small>
+            </div>
+            <label>
+              <span>What should we check?</span>
+              <PremiumSelect
+                ariaLabel="Question report reason"
+                value={reportReason}
+                onChange={setReportReason}
+                options={reportReasonOptions}
+              />
+            </label>
+            <label>
+              <span>Additional note <small>Optional</small></span>
+              <textarea
+                value={reportMessage}
+                maxLength={1500}
+                placeholder="Tell us what looks wrong or what you expected to see."
+                onChange={(event) => setReportMessage(event.target.value)}
+              />
+            </label>
+            {reportStatus.message ? (
+              <p className={`support-status ${reportStatus.type}`}>{reportStatus.message}</p>
             ) : null}
           </div>
         ) : null}

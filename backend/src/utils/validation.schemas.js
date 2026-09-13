@@ -153,6 +153,21 @@ export const supportMessageSchema = z.object({
   pageUrl: z.string().max(500).optional(),
 });
 
+export const questionReportSchema = z.object({
+  attemptId: z.string().min(1),
+  questionId: z.string().min(1),
+  reason: z.enum([
+    'INCORRECT_ANSWER',
+    'QUESTION_TEXT',
+    'ANSWER_CHOICES',
+    'EXPLANATION',
+    'IMAGE',
+    'OTHER'
+  ]),
+  message: z.string().trim().max(1500).optional(),
+  pageUrl: z.string().max(500).optional()
+});
+
 export const desmosLessonSchema = z.object({
   title: z.string().min(3).max(160),
   summary: z.string().min(10).max(600),

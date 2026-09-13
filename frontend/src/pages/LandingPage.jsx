@@ -3,11 +3,15 @@ import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import {
   ArrowRight,
   BookOpenCheck,
+  ChevronDown,
   GraduationCap,
+  Instagram,
   Languages,
   Mail,
   MapPin,
+  Phone,
   Play,
+  Send,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import LocomotiveScroll from "locomotive-scroll";
@@ -40,12 +44,34 @@ const tracks = [
   },
 ];
 
+const publicContact = {
+  email: import.meta.env.VITE_PUBLIC_CONTACT_EMAIL || "monoprepsupport@gmail.com",
+  phone: import.meta.env.VITE_PUBLIC_CONTACT_PHONE || "",
+  telegram: import.meta.env.VITE_PUBLIC_TELEGRAM_URL || "",
+};
+
+function getTelegramUrl(value) {
+  if (!value) return "";
+  if (/^https?:\/\//i.test(value)) return value;
+  return `https://t.me/${value.replace(/^@/, "")}`;
+}
+
+function getInstagramUrl(value) {
+  return `https://instagram.com/${String(value || "").replace(/^@/, "")}`;
+}
+
 const founders = [
   {
     key: "product",
     img: dashboardAssets.ogabek,
     name: "Og'abek Orziyev",
     asset: dashboardAssets.ai,
+    contact: {
+      ...publicContact,
+      email: "orziyevogabek67@gmail.com",
+      phone: "+998991508651",
+      instagram: "@orziyev.404",
+    },
   },
   {
     key: "academic",
@@ -53,6 +79,12 @@ const founders = [
     initials: "AL",
     name: "Rustamov Javohir",
     asset: dashboardAssets.exam,
+    contact: {
+      ...publicContact,
+      email: "rustamovjavohir3112@gmail.com",
+      phone: "+998949573112",
+      instagram: "@javaaxi",
+    },
   },
   {
     key: "engineering",
@@ -60,13 +92,22 @@ const founders = [
     initials: "PE",
     name: "Maftunaxon Muhammadiyeva",
     asset: dashboardAssets.chart,
+    contact: {
+      ...publicContact,
+      email: "muhammadiyevamaftunaxon997@gmail.com",
+      phone: "+998908092822",
+      instagram: "@maf_tuna220",
+    },
   },
 ];
+
+const faqItems = ["practice", "score", "calculator", "answers", "account", "support"];
 
 export default function LandingPage() {
   const { t } = useI18n();
   const reduceMotion = useReducedMotion();
   const [activeTrack, setActiveTrack] = useState(0);
+  const [activeFaq, setActiveFaq] = useState(0);
 
   useEffect(() => {
     if (reduceMotion) return undefined;
@@ -107,6 +148,7 @@ export default function LandingPage() {
             <a href="#about">{t("landing.nav.about")}</a>
             <a href="#platform">{t("landing.nav.platform")}</a>
             <a href="#founders">{t("landing.nav.founders")}</a>
+            <a href="#faq">{t("landing.nav.faq")}</a>
             <a href="#contact">{t("landing.nav.contact")}</a>
           </div>
           <div className="marketing-nav-actions">
@@ -300,8 +342,69 @@ export default function LandingPage() {
                 <small>{t(`landing.founder.${founder.key}.role`)}</small>
               </div>
               <p>{t(`landing.founder.${founder.key}.copy`)}</p>
+              <div className="founder-contact-links" aria-label={`${founder.name} contact options`}>
+                {founder.contact.phone ? (
+                  <a href={`tel:${founder.contact.phone.replace(/[^+\d]/g, "")}`} aria-label={`Call ${founder.name}`} title="Phone">
+                    <Phone aria-hidden="true" />
+                  </a>
+                ) : null}
+                {founder.contact.email ? (
+                  <a href={`mailto:${founder.contact.email}`} aria-label={`Email ${founder.name}`} title="Email">
+                    <Mail aria-hidden="true" />
+                  </a>
+                ) : null}
+                {founder.contact.telegram ? (
+                  <a href={getTelegramUrl(founder.contact.telegram)} target="_blank" rel="noreferrer" aria-label={`Message ${founder.name} on Telegram`} title="Telegram">
+                    <Send aria-hidden="true" />
+                  </a>
+                ) : null}
+                {founder.contact.instagram ? (
+                  <a href={getInstagramUrl(founder.contact.instagram)} target="_blank" rel="noreferrer" aria-label={`Open ${founder.name} on Instagram`} title="Instagram">
+                    <Instagram aria-hidden="true" />
+                  </a>
+                ) : null}
+              </div>
             </motion.article>
           ))}
+        </div>
+      </section>
+
+      <section className="marketing-faq" id="faq" data-scroll>
+        <header>
+          <span>{t("landing.faq.eyebrow")}</span>
+          <h2>{t("landing.faq.title")}</h2>
+          <p>{t("landing.faq.copy")}</p>
+        </header>
+        <div className="marketing-faq-list">
+          {faqItems.map((key, index) => {
+            const open = activeFaq === index;
+            return (
+              <article key={key} className={open ? "open" : ""}>
+                <button
+                  type="button"
+                  aria-expanded={open}
+                  aria-controls={`faq-answer-${key}`}
+                  onClick={() => setActiveFaq(open ? -1 : index)}
+                >
+                  <span>{t(`landing.faq.${key}.question`)}</span>
+                  <ChevronDown aria-hidden="true" />
+                </button>
+                <AnimatePresence initial={false}>
+                  {open ? (
+                    <motion.div
+                      id={`faq-answer-${key}`}
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      transition={{ duration: reduceMotion ? 0 : 0.22, ease: [0.22, 1, 0.36, 1] }}
+                    >
+                      <p>{t(`landing.faq.${key}.answer`)}</p>
+                    </motion.div>
+                  ) : null}
+                </AnimatePresence>
+              </article>
+            );
+          })}
         </div>
       </section>
 
@@ -340,9 +443,19 @@ export default function LandingPage() {
         </div>
         <div className="marketing-footer-contact">
           <strong>{t("landing.footer.contact")}</strong>
-          <a href="mailto:hello@monoprep.uz">
-            <Mail aria-hidden="true" /> monoprepsupport@gmail.com
+          <a href={`mailto:${publicContact.email}`}>
+            <Mail aria-hidden="true" /> {publicContact.email}
           </a>
+          {publicContact.phone ? (
+            <a href={`tel:${publicContact.phone.replace(/[^+\d]/g, "")}`}>
+              <Phone aria-hidden="true" /> {publicContact.phone}
+            </a>
+          ) : null}
+          {publicContact.telegram ? (
+            <a href={getTelegramUrl(publicContact.telegram)} target="_blank" rel="noreferrer">
+              <Send aria-hidden="true" /> Telegram
+            </a>
+          ) : null}
           <span>
             <MapPin aria-hidden="true" /> Tashkent, Uzbekistan
           </span>

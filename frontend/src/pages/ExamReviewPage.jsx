@@ -166,6 +166,7 @@ export default function ExamReviewPage() {
   const [surveyStep, setSurveyStep] = useState(1);
   const [reportRow, setReportRow] = useState(null);
   const [reportReason, setReportReason] = useState("INCORRECT_ANSWER");
+  const [reportTelegramUsername, setReportTelegramUsername] = useState("");
   const [reportMessage, setReportMessage] = useState("");
   const [reportSending, setReportSending] = useState(false);
   const [reportStatus, setReportStatus] = useState({ type: "", message: "" });
@@ -377,12 +378,21 @@ export default function ExamReviewPage() {
 
   async function handleQuestionReport() {
     if (!reportRow || reportSending) return;
+    const telegramUsername = reportTelegramUsername.trim();
+    if (!/^@?[a-zA-Z0-9_]{5,32}$/.test(telegramUsername)) {
+      setReportStatus({
+        type: "error",
+        message: "Enter a valid Telegram username, for example @username.",
+      });
+      return;
+    }
     setReportSending(true);
     setReportStatus({ type: "", message: "" });
     try {
       await sendQuestionReport({
         attemptId: attempt.id,
         questionId: reportRow.id,
+        telegramUsername,
         reason: reportReason,
         message: reportMessage.trim() || undefined,
         pageUrl: window.location.href,
@@ -700,6 +710,17 @@ export default function ExamReviewPage() {
                 value={reportReason}
                 onChange={setReportReason}
                 options={reportReasonOptions}
+              />
+            </label>
+            <label>
+              <span>Telegram username <small>Required</small></span>
+              <input
+                type="text"
+                value={reportTelegramUsername}
+                maxLength={33}
+                autoComplete="off"
+                placeholder="@username"
+                onChange={(event) => setReportTelegramUsername(event.target.value)}
               />
             </label>
             <label>

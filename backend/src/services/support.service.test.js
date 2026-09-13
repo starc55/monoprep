@@ -7,6 +7,7 @@ const user = { fullName: 'Test Student', email: 'student@example.com', role: 'ST
 test('escapes user content in Telegram support posts', () => {
   const text = formatSupportMessage({
     user,
+    contactEmail: 'contact@example.com',
     subject: '<b>Timer</b>',
     message: 'The page shows 5 < 10.',
     pageUrl: 'https://monoprep.vercel.app/support'
@@ -14,6 +15,7 @@ test('escapes user content in Telegram support posts', () => {
 
   assert.match(text, /&lt;b&gt;Timer&lt;\/b&gt;/);
   assert.match(text, /5 &lt; 10/);
+  assert.match(text, /Contact email:<\/b> contact@example.com/);
   assert.doesNotMatch(text, /<b>Timer<\/b>/);
 });
 
@@ -33,6 +35,7 @@ test('formats a question report with verified exam context', () => {
 
   const text = formatQuestionReportMessage({
     user,
+    telegramUsername: '@test_student',
     attempt,
     section,
     question,
@@ -43,6 +46,7 @@ test('formats a question report with verified exam context', () => {
   });
 
   assert.match(text, /Incorrect answer key/);
+  assert.match(text, /Telegram:<\/b> @test_student/);
   assert.match(text, /Practice 1/);
   assert.match(text, /Math Module 1/);
   assert.match(text, /Student answer:<\/b> A/);

@@ -10752,9 +10752,8 @@ textarea:focus {
   width: 100%;
 }
 
+.question-report-form input,
 .question-report-form textarea {
-  min-height: 116px;
-  resize: vertical;
   border: 1px solid #dce3ed;
   border-radius: 8px;
   padding: 12px;
@@ -10764,6 +10763,16 @@ textarea:focus {
   line-height: 1.55;
 }
 
+.question-report-form input {
+  min-height: 44px;
+}
+
+.question-report-form textarea {
+  min-height: 116px;
+  resize: vertical;
+}
+
+.question-report-form input:focus,
 .question-report-form textarea:focus {
   border-color: #245eea;
   outline: 3px solid rgba(36, 94, 234, 0.12);

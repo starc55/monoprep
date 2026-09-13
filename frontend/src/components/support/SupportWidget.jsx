@@ -4,6 +4,7 @@ import Button from '../ui/Button.jsx';
 import LordIcon from '../ui/LordIcon.jsx';
 import Modal from '../ui/Modal.jsx';
 import { sendSupportRequest } from '../../services/supportService.js';
+import { useAuthStore } from '../../store/authStore.js';
 
 const SUPPORT_ICON = 'https://cdn.lordicon.com/fttvwdlw.json';
 const SEND_ICON = 'https://cdn.lordicon.com/hmpomorl.json';
@@ -32,8 +33,10 @@ function readSavedPosition() {
 }
 
 export default function SupportWidget() {
+  const user = useAuthStore((state) => state.user);
   const form = useForm({
     defaultValues: {
+      contactEmail: user?.email || '',
       subject: '',
       message: ''
     }
@@ -70,7 +73,7 @@ export default function SupportWidget() {
         ...values,
         pageUrl: window.location.href
       });
-      form.reset();
+      form.reset({ contactEmail: user?.email || '', subject: '', message: '' });
       setStatus({
         type: 'success',
         message: 'Support request sent. We received it in Telegram.'
@@ -187,6 +190,25 @@ export default function SupportWidget() {
           <p>Tell us what is not working. Your message is sent directly to the MonoPrep Telegram support channel.</p>
         </div>
         <form id="support-widget-form" className="support-widget-form" onSubmit={form.handleSubmit(handleSubmit)}>
+          <label>
+            Contact email
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder="you@example.com"
+              aria-invalid={Boolean(form.formState.errors.contactEmail)}
+              {...form.register('contactEmail', {
+                required: 'Email is required so support can contact you.',
+                pattern: {
+                  value: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+                  message: 'Enter a valid email address.'
+                }
+              })}
+            />
+            {form.formState.errors.contactEmail ? (
+              <small className="field-error-message">{form.formState.errors.contactEmail.message}</small>
+            ) : null}
+          </label>
           <label>
             Subject
             <input

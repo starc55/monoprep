@@ -148,6 +148,7 @@ export const attemptIdParamSchema = z.object({
 });
 
 export const supportMessageSchema = z.object({
+  contactEmail: z.string().trim().email().max(254),
   subject: z.string().min(3).max(120),
   message: z.string().min(10).max(2000),
   pageUrl: z.string().max(500).optional(),
@@ -156,6 +157,10 @@ export const supportMessageSchema = z.object({
 export const questionReportSchema = z.object({
   attemptId: z.string().min(1),
   questionId: z.string().min(1),
+  telegramUsername: z.string().trim().regex(
+    /^@?[a-zA-Z0-9_]{5,32}$/,
+    'Enter a valid Telegram username.'
+  ),
   reason: z.enum([
     'INCORRECT_ANSWER',
     'QUESTION_TEXT',

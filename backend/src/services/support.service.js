@@ -20,7 +20,7 @@ function escapeHtml(value = '') {
     .replace(/>/g, '&gt;');
 }
 
-export function formatSupportMessage({ user, subject, message, pageUrl }) {
+export function formatSupportMessage({ user, contactEmail, subject, message, pageUrl }) {
   return [
     '<b>MONOPREP SUPPORT</b>',
     '<i>New message from the platform</i>',
@@ -29,6 +29,7 @@ export function formatSupportMessage({ user, subject, message, pageUrl }) {
     '',
     `<b>Subject:</b> ${escapeHtml(subject)}`,
     `<b>User:</b> ${escapeHtml(user.fullName)} (${escapeHtml(user.email)})`,
+    `<b>Contact email:</b> ${escapeHtml(contactEmail)}`,
     `<b>Role:</b> ${escapeHtml(user.role)}`,
     pageUrl ? `<b>Page:</b> ${escapeHtml(pageUrl)}` : '',
     '',
@@ -57,7 +58,7 @@ function getCorrectAnswer(question) {
   return labels.length ? labels.join(', ') : 'Not available';
 }
 
-export function formatQuestionReportMessage({ user, attempt, section, question, answer, reason, message, pageUrl }) {
+export function formatQuestionReportMessage({ user, telegramUsername, attempt, section, question, answer, reason, message, pageUrl }) {
   const questionNumber = (section.questions || []).findIndex((item) => item.id === question.id) + 1;
   const prompt = String(question.questionText || '').slice(0, 700);
   return [
@@ -68,6 +69,7 @@ export function formatQuestionReportMessage({ user, attempt, section, question, 
     '',
     `<b>Issue:</b> ${escapeHtml(REPORT_REASON_LABELS[reason] || reason)}`,
     `<b>Student:</b> ${escapeHtml(user.fullName)} (${escapeHtml(user.email)})`,
+    `<b>Telegram:</b> ${escapeHtml(telegramUsername.startsWith('@') ? telegramUsername : `@${telegramUsername}`)}`,
     `<b>Exam:</b> ${escapeHtml(attempt.exam.title)}`,
     `<b>Module:</b> ${escapeHtml(section.title)}`,
     `<b>Question:</b> ${questionNumber}`,
@@ -87,7 +89,7 @@ async function sendTelegramMessage(text) {
   if (!env.telegramBotToken || !env.telegramChatId) {
     throw new ApiError(
       503,
-      'Telegram support is not configured. Add TELEGRAM_BOT_TOKEN and TELEGRAM_CHAT_ID on the backend.'
+      'Support is temporarily unavailable. Please try again shortly.'
     );
   }
 
@@ -119,12 +121,12 @@ async function sendTelegramMessage(text) {
   }
 }
 
-export async function sendSupportMessage({ user, subject, message, pageUrl }) {
-  await sendTelegramMessage(formatSupportMessage({ user, subject, message, pageUrl }));
+export async function sendSupportMessage({ user, contactEmail, subject, message, pageUrl }) {
+  await sendTelegramMessage(formatSupportMessage({ user, contactEmail, subject, message, pageUrl }));
   return { sent: true };
 }
 
-export async function sendQuestionReport({ user, attemptId, questionId, reason, message, pageUrl }) {
+export async function sendQuestionReport({ user, attemptId, questionId, telegramUsername, reason, message, pageUrl }) {
   const attempt = await getAttemptById(attemptId, user, false);
   if (attempt.status === 'IN_PROGRESS') {
     throw new ApiError(400, 'Question reports are available after the exam is submitted.');
@@ -148,6 +150,7 @@ export async function sendQuestionReport({ user, attemptId, questionId, reason, 
   const answer = (attempt.answers || []).find((item) => item.questionId === questionId);
   await sendTelegramMessage(formatQuestionReportMessage({
     user,
+    telegramUsername,
     attempt,
     section,
     question,

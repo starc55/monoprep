@@ -17972,7 +17972,8 @@ textarea:focus {
   width: 38px;
   height: 38px;
   border-radius: 7px;
-  object-fit: cover;
+  object-fit: contain;
+  filter: brightness(0) saturate(100%) invert(10%) sepia(35%) saturate(1710%) hue-rotate(178deg) brightness(90%);
 }
 
 .launch-signin {
@@ -18016,14 +18017,14 @@ textarea:focus {
 .launch-hero h1 {
   margin: 0;
   color: #07142a;
-  font-size: clamp(4rem, 9vw, 7.8rem);
+  font-size: 7rem;
   line-height: 0.92;
 }
 
 .launch-lead {
   margin: 24px 0 34px;
   color: #33445f;
-  font-size: clamp(1.2rem, 2.2vw, 1.8rem);
+  font-size: 1.65rem;
   line-height: 1.35;
 }
 
@@ -18034,22 +18035,67 @@ textarea:focus {
 }
 
 .launch-countdown-unit {
-  min-height: 104px;
-  padding: 16px;
-  border: 1px solid #cbd5e3;
+  min-height: 116px;
+  padding: 10px 10px 14px;
+  border: 1px solid #c4cfde;
   border-radius: 8px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: 0 14px 34px rgba(10, 30, 64, 0.08);
+  text-align: center;
 }
 
-.launch-countdown-unit strong {
-  display: block;
+.launch-flip-display {
+  position: relative;
+  display: grid;
+  height: 72px;
+  overflow: hidden;
+  place-items: center;
+  border: 1px solid #15294c;
+  border-radius: 6px;
   font-variant-numeric: tabular-nums;
-  color: #081933;
-  font-size: 2.25rem;
+  color: #f8fbff;
+  background: #0a1b38;
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  font-size: 2.35rem;
   line-height: 1;
+  perspective: 500px;
 }
 
-.launch-countdown-unit span {
+.launch-flip-half {
+  position: absolute;
+  inset-inline: 0;
+  height: 50%;
+  pointer-events: none;
+}
+
+.launch-flip-half-top {
+  top: 0;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.launch-flip-half-bottom {
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.13);
+}
+
+.launch-flip-number {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  transform-origin: center;
+}
+
+.launch-flip-hinge {
+  position: absolute;
+  z-index: 3;
+  inset: 50% 0 auto;
+  height: 1px;
+  background: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.45);
+}
+
+.launch-countdown-label {
   display: block;
   margin-top: 12px;
   color: #64748b;
@@ -18109,6 +18155,91 @@ textarea:focus {
   color: #255bd8;
 }
 
+.launch-celebration {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  overflow: hidden;
+  color: #fff;
+  background: rgba(4, 15, 36, 0.96);
+  animation: launch-celebration-in 0.35s ease both;
+}
+
+.launch-celebration-message {
+  position: absolute;
+  z-index: 3;
+  inset: 50% auto auto 50%;
+  display: flex;
+  width: min(520px, calc(100% - 40px));
+  transform: translate(-50%, -50%);
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  animation: launch-message-in 0.65s 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.launch-celebration-message img {
+  width: 76px;
+  height: 76px;
+  margin-bottom: 20px;
+  object-fit: contain;
+}
+
+.launch-celebration-message strong {
+  font-size: 2.75rem;
+  line-height: 1.05;
+}
+
+.launch-celebration-message span {
+  margin-top: 12px;
+  color: #cbd8eb;
+  font-size: 1rem;
+}
+
+.launch-firework {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+}
+
+.launch-firework-particle {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  animation: launch-logo-particle 1.6s cubic-bezier(0.16, 0.74, 0.31, 1) both;
+}
+
+.launch-firework-particle img {
+  width: 15px;
+  height: 15px;
+  object-fit: contain;
+}
+
+.launch-firework-particle .tone-blue {
+  filter: brightness(0) saturate(100%) invert(54%) sepia(91%) saturate(2576%) hue-rotate(190deg) brightness(103%);
+}
+
+.launch-firework-particle .tone-white {
+  filter: none;
+}
+
+@keyframes launch-logo-particle {
+  0% { opacity: 0; transform: translate(0, 80px) scale(0.3) rotate(0); }
+  18% { opacity: 1; transform: translate(0, 0) scale(0.8) rotate(40deg); }
+  70% { opacity: 1; transform: translate(var(--firework-x), var(--firework-y)) scale(1) rotate(220deg); }
+  100% { opacity: 0; transform: translate(var(--firework-x), calc(var(--firework-y) + 48px)) scale(0.45) rotate(320deg); }
+}
+
+@keyframes launch-celebration-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes launch-message-in {
+  from { opacity: 0; transform: translate(-50%, -44%) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+
 .app-error-fallback {
   display: flex;
   min-height: 100vh;
@@ -18132,12 +18263,15 @@ textarea:focus {
   .launch-proof { width: min(100% - 28px, 1180px); }
   .launch-header { padding: 16px 0; }
   .launch-hero { min-height: auto; padding: 68px 0 120px; }
-  .launch-hero h1 { font-size: clamp(3.6rem, 18vw, 5.4rem); }
+  .launch-hero h1 { font-size: 4rem; }
+  .launch-lead { font-size: 1.2rem; }
   .launch-countdown { width: 100%; grid-template-columns: repeat(2, 1fr); }
   .launch-countdown-unit { min-height: 92px; }
   .launch-proof { margin-top: 0; grid-template-columns: 1fr; }
   .launch-proof div { min-height: 58px; border-bottom: 1px solid #e1e6ef; }
   .launch-page-backdrop { width: 100vw; opacity: 0.08; }
+  .launch-celebration-message strong { font-size: 2rem; }
+  .launch-firework-particle img { width: 11px; height: 11px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

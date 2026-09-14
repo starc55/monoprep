@@ -1,8 +1,8 @@
 import CountdownUnit from "./CountdownUnit.jsx";
 import { useCountdown } from "../../hooks/useCountdown.js";
 
-export default function LaunchCountdown({ launchAt }) {
-  const remaining = useCountdown(launchAt);
+export default function LaunchCountdown({ launchAt, onExpire }) {
+  const remaining = useCountdown(launchAt, onExpire);
   const days = Math.floor(remaining / 86400);
   const hours = Math.floor((remaining % 86400) / 3600);
   const minutes = Math.floor((remaining % 3600) / 60);
@@ -21,4 +21,3 @@ export default function LaunchCountdown({ launchAt }) {
     </div>
   );
 }
-

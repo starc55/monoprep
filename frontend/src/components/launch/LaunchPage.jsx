@@ -1,19 +1,32 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ArrowRight, BarChart3, BookOpenCheck, Target } from "lucide-react";
 import { motion, useReducedMotion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { captureEvent, captureEventOnce } from "../../lib/analytics.js";
 import LaunchCountdown from "./LaunchCountdown.jsx";
+import LaunchFireworks from "./LaunchFireworks.jsx";
 
 const launchAt = Date.parse(import.meta.env.VITE_PUBLIC_LAUNCH_AT || "");
 
-export default function LaunchPage() {
+export default function LaunchPage({ onLaunchComplete }) {
   const reduceMotion = useReducedMotion();
+  const [celebrating, setCelebrating] = useState(false);
 
   useEffect(() => {
     captureEventOnce("launch_page_viewed", {
       launch_state: Number.isFinite(launchAt) && launchAt > Date.now() ? "countdown" : "live",
     });
+  }, []);
+
+  useEffect(() => {
+    if (!celebrating) return undefined;
+    const timer = window.setTimeout(onLaunchComplete, reduceMotion ? 900 : 4800);
+    return () => window.clearTimeout(timer);
+  }, [celebrating, onLaunchComplete, reduceMotion]);
+
+  const handleLaunch = useCallback(() => {
+    setCelebrating(true);
+    captureEventOnce("launch_countdown_completed");
   }, []);
 
   return (
@@ -42,7 +55,7 @@ export default function LaunchPage() {
         <span className="launch-eyebrow">Public Launch</span>
         <h1>MonoPrep</h1>
         <p className="launch-lead">The smarter way to prepare for the SAT.</p>
-        <LaunchCountdown launchAt={launchAt} />
+        <LaunchCountdown launchAt={launchAt} onExpire={handleLaunch} />
         <p className="launch-supporting">Personalized practice. Smarter analytics. Better preparation.</p>
         <Link
           className="launch-primary-action"
@@ -58,7 +71,7 @@ export default function LaunchPage() {
         <div><Target aria-hidden="true" /><span>Focused skill preparation</span></div>
         <div><BarChart3 aria-hidden="true" /><span>Actionable score analytics</span></div>
       </section>
+      <LaunchFireworks active={celebrating} />
     </main>
   );
 }
-

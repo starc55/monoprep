@@ -4,6 +4,8 @@ import Loader from "./components/ui/Loader.jsx";
 import { useAuthBootstrap } from "./hooks/useAuth.js";
 import AppRoutes from "./routes/AppRoutes.jsx";
 import { useAuthStore } from "./store/authStore.js";
+import AppTelemetry from "./components/observability/AppTelemetry.jsx";
+import RouteSeo from "./components/seo/RouteSeo.jsx";
 
 export default function App() {
   useAuthBootstrap();
@@ -25,6 +27,8 @@ export default function App() {
 
   return (
     <Suspense fallback={<Loader label="Loading your workspace..." />}>
+      <RouteSeo />
+      <AppTelemetry />
       <AppRoutes />
     </Suspense>
   );

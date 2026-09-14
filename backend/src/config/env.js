@@ -22,6 +22,14 @@ function positiveInteger(name, fallback) {
   return value;
 }
 
+function rate(name, fallback) {
+  const value = Number(process.env[name] ?? fallback);
+  if (!Number.isFinite(value) || value < 0 || value > 1) {
+    throw new Error(`${name} must be between 0 and 1.`);
+  }
+  return value;
+}
+
 export const env = {
   nodeEnv,
   isProduction,
@@ -36,5 +44,9 @@ export const env = {
   openAiTimeoutMs: positiveInteger('OPENAI_TIMEOUT_MS', 30_000),
   clientUrl: requireEnv('CLIENT_URL', 'http://localhost:5173'),
   telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  telegramChatId: process.env.TELEGRAM_CHAT_ID || ''
+  telegramChatId: process.env.TELEGRAM_CHAT_ID || '',
+  sentryDsn: process.env.SENTRY_DSN?.trim() || '',
+  sentryEnvironment: process.env.SENTRY_ENVIRONMENT?.trim() || nodeEnv,
+  sentryRelease: process.env.SENTRY_RELEASE?.trim() || '',
+  sentryTracesSampleRate: rate('SENTRY_TRACES_SAMPLE_RATE', 0.1)
 };

@@ -27,15 +27,16 @@
   "dependencies": {
     "@napi-rs/canvas": "^0.1.100",
     "@prisma/client": "^6.8.2",
+    "@sentry/node": "^10.74.0",
     "@supabase/supabase-js": "2.110.8",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
-    "express": "^4.19.2",
+    "express": "^4.22.3",
     "express-rate-limit": "^8.6.0",
     "file-type": "^22.0.1",
     "helmet": "^8.0.0",
-    "morgan": "^1.11.0",
-    "multer": "^2.2.0",
+    "morgan": "^1.12.1",
+    "multer": "^2.4.0",
     "openai": "^4.104.0",
     "pdf-lib": "^1.17.1",
     "pdfjs-dist": "5.4.624",
@@ -51,6 +52,6 @@
     "deepmerge-ts": "8.0.2",
     "form-data": "4.0.6",
     "ip-address": "10.5.0",
-    "qs": "6.15.3"
+    "qs": "6.16.0"
   }
 }

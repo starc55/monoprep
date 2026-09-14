@@ -5,6 +5,7 @@ import morgan from "morgan";
 import path from "path";
 import { fileURLToPath } from "url";
 import { env } from "./config/env.js";
+import { Sentry } from "./instrument.js";
 import authRoutes from "./routes/auth.routes.js";
 import examRoutes from "./routes/exam.routes.js";
 import sectionRoutes from "./routes/section.routes.js";
@@ -87,6 +88,10 @@ export function createApp() {
     res.json({ service: "monoprep-api", status: "ok" });
   });
 
+  app.use("/api", (_req, res, next) => {
+    res.setHeader("Cache-Control", "no-store");
+    next();
+  });
   app.use("/api", apiLimiter);
   app.use("/api/auth", authRoutes);
   app.use("/api/exams", examRoutes);
@@ -106,6 +111,9 @@ export function createApp() {
   app.use("/api/support", supportRoutes);
   app.use("/api/admin", adminRoutes);
 
+  if (env.sentryDsn) {
+    Sentry.setupExpressErrorHandler(app);
+  }
   app.use(notFoundHandler);
   app.use(errorHandler);
 

@@ -1,0 +1,13 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /dashboard
+Disallow: /exam-room
+Disallow: /analytics
+Disallow: /account
+Disallow: /settings
+Disallow: /auth/
+Disallow: /reset-password
+Disallow: /api/
+
+Sitemap: https://monoprep.vercel.app/sitemap.xml

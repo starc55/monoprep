@@ -9,7 +9,7 @@ import {
 } from "./routeGuards.jsx";
 
 const LoginPage = lazy(() => import("../pages/LoginPage.jsx"));
-const LandingPage = lazy(() => import("../pages/LandingPage.jsx"));
+const PublicHomeRoute = lazy(() => import("../components/launch/PublicHomeRoute.jsx"));
 const ProductSelectPage = lazy(() => import("../pages/ProductSelectPage.jsx"));
 const RegisterPage = lazy(() => import("../pages/RegisterPage.jsx"));
 const ForgotPasswordPage = lazy(() => import("../pages/ForgotPasswordPage.jsx"));
@@ -93,7 +93,7 @@ function AdminPage({ Page }) {
 export default function AppRoutes() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<PublicHomeRoute />} />
       <Route path="/products" element={<ProductSelectPage />} />
       <Route path="/app" element={<RoleRedirect />} />
       <Route path="/login" element={<LoginPage />} />

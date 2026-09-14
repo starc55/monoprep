@@ -15,6 +15,7 @@ import {
   getMyAnalytics,
 } from "../services/analyticsService.js";
 import { useAuthStore } from "../store/authStore.js";
+import { captureEventOnce } from "../lib/analytics.js";
 import { formatSeconds } from "../utils/format.js";
 import { dashboardAssets } from "../data/dashboardAssets.js";
 
@@ -399,6 +400,10 @@ export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState(null);
   const [leaderboard, setLeaderboard] = useState(null);
   const [activeSection, setActiveSection] = useState("score-summary");
+
+  useEffect(() => {
+    captureEventOnce("analytics_viewed");
+  }, []);
 
   useEffect(() => {
     Promise.all([

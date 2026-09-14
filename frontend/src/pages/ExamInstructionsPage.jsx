@@ -8,6 +8,7 @@ import EmptyState from "../components/ui/EmptyState.jsx";
 import { getExam } from "../services/examService.js";
 import { startAttempt } from "../services/attemptService.js";
 import { useExamStore } from "../store/examStore.js";
+import { captureEvent } from "../lib/analytics.js";
 
 export default function ExamInstructionsPage() {
   const { examId } = useParams();
@@ -40,6 +41,11 @@ export default function ExamInstructionsPage() {
       }
 
       const attempt = await startAttempt(examId);
+      captureEvent(exam.type === "FULL_LENGTH" ? "test_started" : "practice_started", {
+        exam_id: exam.id,
+        exam_type: exam.type,
+        exam_source: exam.source,
+      });
       initializeSession(attempt.id);
       navigate(`/attempts/${attempt.id}/exam`);
     } catch (error) {

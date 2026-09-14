@@ -8,3 +8,5 @@ backend/generated
 
 .vercel
 .env*
+!backend/.env.example
+!frontend/.env.example

@@ -28,6 +28,7 @@ import { getMyAnalytics } from "../services/analyticsService.js";
 import { getStudentProfile } from "../services/socialService.js";
 import { useAuthStore } from "../store/authStore.js";
 import { loadUserSettings } from "../utils/userPreferences.js";
+import { captureEventOnce } from "../lib/analytics.js";
 
 function formatSkill(skill) {
   return skill ? skill.replaceAll("_", " ") : "Focused practice";
@@ -161,6 +162,10 @@ export default function DashboardPage() {
   const [analytics, setAnalytics] = useState(null);
   const [profile, setProfile] = useState(null);
   const [preferences, setPreferences] = useState(() => loadUserSettings(user));
+
+  useEffect(() => {
+    captureEventOnce("dashboard_viewed");
+  }, []);
 
   useEffect(() => {
     const syncPreferences = () => setPreferences(loadUserSettings(user));

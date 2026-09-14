@@ -8,6 +8,8 @@ import {
   updateCurrentUser
 } from '../services/authService.js';
 import { supabase } from '../config/supabase.js';
+import { captureEvent, identifyAnalyticsUser, resetAnalytics } from '../lib/analytics.js';
+import { setMonitoringUser } from '../lib/monitoring.js';
 
 export const useAuthStore = create((set) => ({
   user: null,
@@ -60,10 +62,14 @@ export const useAuthStore = create((set) => ({
     return data.subscription;
   },
   login: async (payload) => {
+    captureEvent('login_started');
     set({ loading: true, error: '' });
     try {
       const data = await loginUser(payload);
       set({ user: data.user, loading: false, verificationRequired: false });
+      identifyAnalyticsUser(data.user);
+      setMonitoringUser(data.user);
+      captureEvent('login_completed', { role: data.user?.role });
       return data.user;
     } catch (error) {
       set({
@@ -74,6 +80,7 @@ export const useAuthStore = create((set) => ({
     }
   },
   register: async (payload) => {
+    captureEvent('signup_started');
     set({ loading: true, error: '' });
     try {
       const data = await registerUser(payload);
@@ -82,6 +89,11 @@ export const useAuthStore = create((set) => ({
         loading: false,
         verificationRequired: data.needsEmailVerification
       });
+      if (data.user) {
+        identifyAnalyticsUser(data.user);
+        setMonitoringUser(data.user);
+        captureEvent('signup_completed', { role: data.user.role });
+      }
       return data;
     } catch (error) {
       set({
@@ -107,9 +119,12 @@ export const useAuthStore = create((set) => ({
   },
   logout: async () => {
     try {
+      captureEvent('logout_completed');
       await logoutUser();
     } finally {
       localStorage.removeItem('monoprep-token');
+      resetAnalytics();
+      setMonitoringUser(null);
       set({ user: null, error: '', verificationRequired: false });
     }
   }

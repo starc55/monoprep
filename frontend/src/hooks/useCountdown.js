@@ -12,6 +12,7 @@ export function useCountdown(targetTimestamp, onExpire) {
   }, []);
 
   const remaining = useMemo(() => {
+    if (!Number.isFinite(targetTimestamp) || targetTimestamp <= 0) return 0;
     return Math.max(0, Math.floor((targetTimestamp - now) / 1000));
   }, [targetTimestamp, now]);
 

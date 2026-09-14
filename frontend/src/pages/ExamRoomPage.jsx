@@ -20,6 +20,7 @@ import {
   submitAttempt,
 } from "../services/attemptService.js";
 import { generateFeedback } from "../services/aiService.js";
+import { captureEvent } from "../lib/analytics.js";
 import { useExamStore } from "../store/examStore.js";
 import { useCountdown } from "../hooks/useCountdown.js";
 import { useExamGuard } from "../hooks/useExamGuard.js";
@@ -242,6 +243,11 @@ export default function ExamRoomPage() {
       setSubmitting(true);
       try {
         const submitted = await submitAttempt(attemptId);
+        captureEvent(attempt.exam.type === "FULL_LENGTH" ? "test_completed" : "practice_completed", {
+          exam_id: attempt.exam.id,
+          exam_type: attempt.exam.type,
+          total_score: submitted.totalScore,
+        });
         setAttempt(submitted);
         clearSession(attemptId);
         generateFeedback(attemptId).catch(() => null);
@@ -283,6 +289,13 @@ export default function ExamRoomPage() {
     answer,
     markedForReview = reviewFlags[questionId] || false
   ) {
+    if (!hasAnswer(answerMap[questionId]) && hasAnswer(answer)) {
+      captureEvent("question_answered", {
+        exam_type: attempt?.exam?.type,
+        section_type: currentSection?.type,
+        response_type: currentQuestion?.responseType || "MULTIPLE_CHOICE",
+      });
+    }
     saveDraftAnswer(attemptId, questionId, answer);
     await queueAnswerSave({
       questionId,
@@ -500,7 +513,12 @@ export default function ExamRoomPage() {
     setBanner("");
     try {
       await flushAnswerSaves();
-      await submitAttempt(attemptId);
+      const submitted = await submitAttempt(attemptId);
+      captureEvent(attempt.exam.type === "FULL_LENGTH" ? "test_completed" : "practice_completed", {
+        exam_id: attempt.exam.id,
+        exam_type: attempt.exam.type,
+        total_score: submitted.totalScore,
+      });
       clearSession(attemptId);
       navigate(`/attempts/${attemptId}/review`, { replace: true });
     } catch (error) {
@@ -571,6 +589,11 @@ export default function ExamRoomPage() {
     if (nextIndex >= refreshedSections.length) {
       try {
         const submitted = await submitAttempt(attemptId);
+        captureEvent(attempt.exam.type === "FULL_LENGTH" ? "test_completed" : "practice_completed", {
+          exam_id: attempt.exam.id,
+          exam_type: attempt.exam.type,
+          total_score: submitted.totalScore,
+        });
         setAttempt(submitted);
         clearSession(attemptId);
         generateFeedback(attemptId).catch(() => null);

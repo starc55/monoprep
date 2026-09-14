@@ -1,7 +1,9 @@
+import './instrument.js';
 import { createApp } from './app.js';
 import { env } from './config/env.js';
 import { prisma } from './config/prisma.js';
 import { ensureDefaultAchievements } from './services/achievement.service.js';
+import { Sentry } from './instrument.js';
 
 const app = createApp();
 
@@ -13,6 +15,7 @@ const server = app.listen(env.port, () => {
 });
 
 server.on('error', (error) => {
+  Sentry.captureException(error);
   console.error('MonoPrep API failed to start:', error);
   process.exitCode = 1;
 });
@@ -32,6 +35,7 @@ async function shutdown(signal) {
 
   server.close(async (error) => {
     try {
+      await Sentry.flush(2_000);
       await prisma.$disconnect();
     } finally {
       clearTimeout(forceExit);

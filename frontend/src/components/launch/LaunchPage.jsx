@@ -31,7 +31,11 @@ export default function LaunchPage({ onLaunchComplete }) {
 
   return (
     <main className="launch-page">
-      <img className="launch-page-backdrop" src="/dashboard-assets/exam.webp" alt="" />
+      <div className="launch-visual" aria-hidden="true">
+        <img className="launch-visual-card launch-visual-card-score" src="/dashboard-assets/score.webp" alt="" />
+        <img className="launch-visual-card launch-visual-card-chart" src="/dashboard-assets/chart.webp" alt="" />
+        <img className="launch-visual-card launch-visual-card-ai" src="/dashboard-assets/ai.webp" alt="" />
+      </div>
       <header className="launch-header">
         <Link className="launch-brand" to="/" aria-label="MonoPrep home">
           <img src="/monoprep-logo.png" alt="" />
@@ -52,11 +56,11 @@ export default function LaunchPage({ onLaunchComplete }) {
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
       >
-        <span className="launch-eyebrow">Public Launch</span>
+        <span className="launch-eyebrow">One focused preparation platform</span>
         <h1>MonoPrep</h1>
-        <p className="launch-lead">The smarter way to prepare for the SAT.</p>
+        <p className="launch-lead">Prepare with clarity for every important next step.</p>
         <LaunchCountdown launchAt={launchAt} onExpire={handleLaunch} />
-        <p className="launch-supporting">Personalized practice. Smarter analytics. Better preparation.</p>
+        <p className="launch-supporting">Practice, feedback, and progress analytics for SAT, IELTS, university readiness, and more.</p>
         <Link
           className="launch-primary-action"
           to="/login"
@@ -67,9 +71,9 @@ export default function LaunchPage({ onLaunchComplete }) {
       </motion.section>
 
       <section className="launch-proof" aria-label="MonoPrep platform capabilities">
-        <div><BookOpenCheck aria-hidden="true" /><span>Realistic Digital SAT practice</span></div>
-        <div><Target aria-hidden="true" /><span>Focused skill preparation</span></div>
-        <div><BarChart3 aria-hidden="true" /><span>Actionable score analytics</span></div>
+        <div><BookOpenCheck aria-hidden="true" /><span>Realistic test preparation</span></div>
+        <div><Target aria-hidden="true" /><span>Focused skill improvement</span></div>
+        <div><BarChart3 aria-hidden="true" /><span>Actionable progress analytics</span></div>
       </section>
       <LaunchFireworks active={celebrating} />
     </main>

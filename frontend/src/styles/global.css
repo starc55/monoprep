@@ -17931,13 +17931,60 @@ textarea:focus {
   background: #f6f8fc;
 }
 
-.launch-page-backdrop {
+.launch-visual {
   position: absolute;
-  inset: auto -4vw -12vh auto;
-  width: min(62vw, 880px);
-  max-height: 82vh;
-  object-fit: contain;
-  opacity: 0.14;
+  z-index: 0;
+  inset: 13vh 2vw 10vh auto;
+  width: min(47vw, 700px);
+  pointer-events: none;
+}
+
+.launch-visual-card {
+  position: absolute;
+  display: block;
+  width: min(30vw, 420px);
+  border: 1px solid rgba(186, 199, 218, 0.86);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 26px 60px rgba(15, 38, 77, 0.14);
+  object-fit: cover;
+}
+
+.launch-visual-card-score {
+  z-index: 3;
+  top: 13%;
+  right: 2%;
+  transform: rotate(3deg);
+  animation: launch-visual-float 7s ease-in-out infinite;
+}
+
+.launch-visual-card-chart {
+  z-index: 2;
+  top: 28%;
+  left: 1%;
+  transform: rotate(-5deg);
+  animation: launch-visual-float 8s 0.5s ease-in-out infinite reverse;
+}
+
+.launch-visual-card-ai {
+  z-index: 1;
+  right: 13%;
+  bottom: 3%;
+  transform: rotate(-2deg);
+  animation: launch-visual-float 9s 0.9s ease-in-out infinite;
+}
+
+.launch-visual::after {
+  position: absolute;
+  z-index: 4;
+  right: 7%;
+  bottom: 12%;
+  width: 104px;
+  height: 104px;
+  border: 1px solid #c9d7ec;
+  border-radius: 50%;
+  content: "";
+  opacity: 0.75;
   pointer-events: none;
 }
 
@@ -18115,6 +18162,7 @@ textarea:focus {
 }
 
 .launch-supporting {
+  max-width: 590px;
   margin: 24px 0 18px;
   color: #52627a;
   font-size: 0.95rem;
@@ -18240,6 +18288,11 @@ textarea:focus {
   to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
 }
 
+@keyframes launch-visual-float {
+  0%, 100% { margin-top: 0; }
+  50% { margin-top: -10px; }
+}
+
 .app-error-fallback {
   display: flex;
   min-height: 100vh;
@@ -18269,7 +18322,8 @@ textarea:focus {
   .launch-countdown-unit { min-height: 92px; }
   .launch-proof { margin-top: 0; grid-template-columns: 1fr; }
   .launch-proof div { min-height: 58px; border-bottom: 1px solid #e1e6ef; }
-  .launch-page-backdrop { width: 100vw; opacity: 0.08; }
+  .launch-visual { inset: 15vh -24vw 15vh auto; width: 100vw; opacity: 0.14; }
+  .launch-visual-card { width: 58vw; }
   .launch-celebration-message strong { font-size: 2rem; }
   .launch-firework-particle img { width: 11px; height: 11px; }
 }

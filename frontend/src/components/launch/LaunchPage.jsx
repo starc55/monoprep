@@ -61,13 +61,6 @@ export default function LaunchPage({ onLaunchComplete }) {
         <p className="launch-lead">Prepare with clarity for every important next step.</p>
         <LaunchCountdown launchAt={launchAt} onExpire={handleLaunch} />
         <p className="launch-supporting">Practice, feedback, and progress analytics for SAT, IELTS, university readiness, and more.</p>
-        <Link
-          className="launch-primary-action"
-          to="/login"
-          onClick={() => captureEvent("launch_signin_clicked", { placement: "hero" })}
-        >
-          Continue to Sign In <ArrowRight aria-hidden="true" />
-        </Link>
       </motion.section>
 
       <section className="launch-proof" aria-label="MonoPrep platform capabilities">

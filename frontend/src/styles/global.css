@@ -15601,7 +15601,7 @@ textarea {
 }
 .marketing-founder-grid {
   display: grid;
-  grid-template-columns: 1.12fr 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   padding-top: 58px;
 }
@@ -15646,9 +15646,6 @@ textarea {
 .marketing-founder-grid article:nth-child(2) {
   margin-top: 30px;
 }
-.marketing-founder-grid article:nth-child(3) {
-  margin-top: 12px;
-}
 .founder-card-art {
   position: absolute;
   z-index: 1;
@@ -15664,12 +15661,6 @@ textarea {
   right: -8px;
   width: 172px;
   height: 172px;
-}
-.founder-card-engineering .founder-card-art {
-  top: -52px;
-  right: -10px;
-  width: 180px;
-  height: 180px;
 }
 .light-surface-3d {
   filter: drop-shadow(0 18px 20px rgba(15, 23, 42, 0.18))
@@ -16343,8 +16334,7 @@ textarea {
     gap: 52px;
     padding-top: 42px;
   }
-  .marketing-founder-grid article:nth-child(2),
-  .marketing-founder-grid article:nth-child(3) {
+  .marketing-founder-grid article:nth-child(2) {
     margin-top: 0;
   }
   .marketing-faq {

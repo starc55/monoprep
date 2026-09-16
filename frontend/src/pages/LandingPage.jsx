@@ -86,19 +86,6 @@ const founders = [
       instagram: "@javaaxi",
     },
   },
-  {
-    key: "engineering",
-    img: dashboardAssets.moh,
-    initials: "PE",
-    name: "Maftunaxon Muhammadiyeva",
-    asset: dashboardAssets.chart,
-    contact: {
-      ...publicContact,
-      email: "muhammadiyevamaftunaxon997@gmail.com",
-      phone: "+998908092822",
-      instagram: "@maf_tuna220",
-    },
-  },
 ];
 
 const faqItems = ["practice", "score", "calculator", "answers", "account", "support"];

@@ -14,5 +14,4 @@ export const dashboardAssets = {
   exam: `${dashboardAssetBase}/exam.webp`,
   ogabek: `${dashboardAssetBase}/ogabek.webp`,
   java: `${dashboardAssetBase}/java.webp`,
-  moh: `${dashboardAssetBase}/moh.webp`,
 };

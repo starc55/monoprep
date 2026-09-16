@@ -61,16 +61,13 @@ const en = {
   "landing.founders.eyebrow": "The team behind MonoPrep",
   "landing.founders.title": "Built where education and product discipline meet",
   "landing.founders.copy":
-    "Three disciplines, one standard: every MonoPrep decision must make preparation clearer, more measurable, and more useful for the student.",
+    "Two founders, one standard: every MonoPrep decision must make preparation clearer, more measurable, and more useful for the student.",
   "landing.founder.product.role": "Founder & Developer",
   "landing.founder.product.copy":
     "Defines the product roadmap and turns student needs into a clear process with measurable outcomes.",
   "landing.founder.academic.role": "Founder & PM",
   "landing.founder.academic.copy":
     "Manages product processes, exam quality, and the academic direction of the platform.",
-  "landing.founder.engineering.role": "Founder & Learning Technology",
-  "landing.founder.engineering.copy":
-    "Builds reliable systems that connect practice, analytics, competition, and daily student progress.",
   "landing.faq.eyebrow": "Frequently asked questions",
   "landing.faq.title": "Clear answers before you begin",
   "landing.faq.copy": "The essentials about practice, scoring, tools, and support.",
@@ -207,16 +204,13 @@ export const messages = {
     "landing.founders.title":
       "Ta'lim va mahsulot intizomi uchrashgan joyda yaratilgan",
     "landing.founders.copy":
-      "Uch yo'nalish, bitta talab: MonoPrep'dagi har bir qaror tayyorgarlikni o'quvchi uchun aniqroq, o'lchanadigan va foydaliroq qilishi kerak.",
+      "Ikki asoschi, bitta talab: MonoPrep'dagi har bir qaror tayyorgarlikni o'quvchi uchun aniqroq, o'lchanadigan va foydaliroq qilishi kerak.",
     "landing.founder.product.role": "Asoschi va Dasturchi",
     "landing.founder.product.copy":
       "Platformaning texnik rivoji va mahsulot yechimlarini boshqaradi.",
     "landing.founder.academic.role": "Asoschi va PM",
     "landing.founder.academic.copy":
       "Mahsulot jarayonlari, imtihon sifati va rivojlanish yo‘nalishini boshqaradi.",
-    "landing.founder.engineering.role": "Asoschi va Ta'lim texnologiyalari",
-    "landing.founder.engineering.copy":
-      "Ta’lim metodikasi, mashqlar va o‘quv samaradorligini rivojlantiradi",
     "landing.faq.eyebrow": "Ko‘p so‘raladigan savollar",
     "landing.faq.title": "Boshlashdan oldin aniq javoblar",
     "landing.faq.copy": "Mashq, baholash, vositalar va yordam bo‘yicha asosiy ma’lumotlar.",
@@ -322,16 +316,13 @@ export const messages = {
     "landing.founders.title":
       "Создано на пересечении образования и продуктовой дисциплины",
     "landing.founders.copy":
-      "Три направления, один стандарт: каждое решение MonoPrep должно делать подготовку понятнее, измеримее и полезнее для ученика.",
+      "Два основателя, один стандарт: каждое решение MonoPrep должно делать подготовку понятнее, измеримее и полезнее для ученика.",
     "landing.founder.product.role": "Основатель и Программист",
     "landing.founder.product.copy":
       "Определяет техническое развитие платформы и управляет продуктовыми решениями.",
     "landing.founder.academic.role": "Основатель и PM",
     "landing.founder.academic.copy":
       "Управляет продуктовыми процессами, качеством экзаменов и академическим направлением платформы.",
-    "landing.founder.engineering.role": "Основатель и инженер по обучению",
-    "landing.founder.engineering.copy":
-      "Развивает методологию обучения, практику и эффективность учеников.",
     "landing.faq.eyebrow": "Частые вопросы",
     "landing.faq.title": "Понятные ответы перед началом",
     "landing.faq.copy": "Главное о практике, оценивании, инструментах и поддержке.",
